@@ -89,7 +89,9 @@
 
 // STM32 compatibility
 #if defined(MCU_STM32)
-#    if defined(STM32_CORE_CK)
+#    if defined(SK32F0xx_MCUCONF) || defined(SK32F077xB)
+#        define CPU_CLOCK SK32_SYSCLK
+#    elif defined(STM32_CORE_CK)
 #        define CPU_CLOCK STM32_CORE_CK
 #    else
 #        define CPU_CLOCK STM32_SYSCLK

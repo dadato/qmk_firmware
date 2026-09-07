@@ -255,6 +255,55 @@ ifneq ($(findstring STM32F072, $(MCU)),)
   STM32_BOOTLOADER_ADDRESS ?= 0x1FFFC800
 endif
 
+ifneq ($(findstring SK32F077, $(MCU)),)
+  # Cortex version
+  MCU = cortex-m0
+
+  # ARM version, CORTEX-M0/M1 are 6, CORTEX-M3/M4/M7 are 7
+  ARMV = 6
+
+  ## chip/board settings
+  # SK32F077 (3Think): Cortex-M0+ chip, register-compatible with the
+  # STM32F072 except for the USB IP (Mentor-MUSB-class "musbfsfc"
+  # controller). The HAL port lives in chibios-contrib under
+  # os/hal/ports/SK32/SK32F0xx (selected via MCU_PORT_NAME).
+  # - the next two should match the directories in
+  #   <chibios[-contrib]>/os/hal/ports/$(MCU_PORT_NAME)/$(MCU_SERIES)
+  #   OR
+  #   <chibios[-contrib]>/os/hal/ports/$(MCU_FAMILY)/$(MCU_SERIES)
+  MCU_FAMILY = STM32
+  MCU_PORT_NAME = SK32
+  MCU_SERIES = SK32F0xx
+
+  # Linker script to use (SK32F077xB, same memory map as STM32F072xB)
+  # - it should exist either in <chibios>/os/common/startup/ARMCMx/compilers/GCC/ld/
+  #   or <keyboard_dir>/ld/
+  MCU_LDSCRIPT ?= SK32F077xB
+
+  # Startup code to use (SK32-specific startup; pulls in the SK32F0xx
+  #  cmparams and the vendor CMSIS device headers)
+  #  - it should exist in <chibios-contrib>/os/common/startup/ARMCMx/compilers/GCC/mk/
+  MCU_STARTUP ?= SK32F0xx
+
+  # Board: it should exist either in <chibios>/os/hal/boards/,
+  # <keyboard_dir>/boards/, or drivers/boards/
+  BOARD ?= GENERIC_SK32_F077
+
+  USE_FPU ?= no
+
+  # UF2 settings
+  UF2_FAMILY ?= STM32F0
+
+  # Bootloader address for STM32 DFU (SK32F077 placeholder, adjust as needed)
+  STM32_BOOTLOADER_ADDRESS ?= 0x1FFFC800
+
+  # SK32F077xB device definition, required by the SK32 CMSIS headers and by
+  # the hard device checks in the SK32 HAL low level drivers (hal_lld.h).
+  # SK32 uses its native SysTick-based ST LLD which only supports periodic
+  # mode, so force CH_CFG_ST_TIMEDELTA to zero for this series.
+  CFLAGS += -DSK32F077xB -DCH_CFG_ST_TIMEDELTA=0
+endif
+
 ifneq ($(findstring STM32F103, $(MCU)),)
   # Cortex version
   MCU = cortex-m3
