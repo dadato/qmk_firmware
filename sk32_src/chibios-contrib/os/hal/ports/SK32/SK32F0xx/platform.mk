@@ -54,16 +54,41 @@ endif
 # list like the shared STM32 DMAv1 driver.mk does.
 PLATFORMSRC += $(CHIBIOS_CONTRIB)/os/hal/ports/SK32/SK32F0xx/sk32_dma.c
 
+# The SK32 SPI is a legacy CR1/CR2/SR/DR class unit (SPIv1 class), its
+# native interrupt-driven driver is used instead of the shared STM32 SPIv2
+# LLD (the latter would require the STM32 registry macros, e.g.
+# STM32_HAS_SPI1, which the SK32 platform does not define).
+ifeq ($(USE_SMART_BUILD),yes)
+ifneq ($(findstring HAL_USE_SPI TRUE,$(HALCONF)),)
+PLATFORMSRC += $(CHIBIOS_CONTRIB)/os/hal/ports/SK32/SK32F0xx/hal_spi_lld.c
+endif
+else
+PLATFORMSRC += $(CHIBIOS_CONTRIB)/os/hal/ports/SK32/SK32F0xx/hal_spi_lld.c
+endif
+
+# The SK32 I2C is a legacy CR1/CR2/SR1/SR2/DR/CCR class unit (no TRISE
+# register, single I2C1 IRQ vector), its native interrupt-driven master
+# driver is used instead of the shared STM32 I2Cv1/I2Cv2 LLDs (the latter
+# target the ISR/ICR/TIMINGR register set while I2Cv1 requires TRISE, DMA
+# streams and the EV/ER IRQ split, none of which applies to this platform).
+ifeq ($(USE_SMART_BUILD),yes)
+ifneq ($(findstring HAL_USE_I2C TRUE,$(HALCONF)),)
+PLATFORMSRC += $(CHIBIOS_CONTRIB)/os/hal/ports/SK32/SK32F0xx/hal_i2c_lld.c
+endif
+else
+PLATFORMSRC += $(CHIBIOS_CONTRIB)/os/hal/ports/SK32/SK32F0xx/hal_i2c_lld.c
+endif
+
 # Drivers compatible with the platform.
 include $(CHIBIOS)/os/hal/ports/STM32/LLD/ADCv1/driver.mk
 include $(CHIBIOS)/os/hal/ports/STM32/LLD/CANv1/driver.mk
 include $(CHIBIOS)/os/hal/ports/STM32/LLD/DACv1/driver.mk
 include $(CHIBIOS)/os/hal/ports/STM32/LLD/DMAv1/driver.mk
-include $(CHIBIOS)/os/hal/ports/STM32/LLD/I2Cv2/driver.mk
 include $(CHIBIOS)/os/hal/ports/STM32/LLD/RTCv2/driver.mk
-include $(CHIBIOS)/os/hal/ports/STM32/LLD/SPIv2/driver_v2.mk
 # The SK32 system tick (ST) driver is native and uses the Cortex-M0 SysTick
 # counter in periodic mode, so the shared STM32 SYSTICKv1 LLD is not used.
+# The shared STM32 SPIv2 and I2Cv1/I2Cv2 LLDs are not used either, the SK32
+# SPI and I2C units are served by the native drivers added above.
 include $(CHIBIOS)/os/hal/ports/STM32/LLD/TIMv1/driver.mk
 # The shared STM32 USARTv2 LLD targets the ISR/ICR register set (STM32F0/F3/L4
 # class), the SK32 USART is instead a legacy SR/DR class unit handled by the

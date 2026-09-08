@@ -126,6 +126,91 @@ static const USBEndpointConfig ep0config = {
  */
 static bool ep0_setup_pending = false;
 
+/**
+ * @brief   Set when the last packet of an EP0 OUT data phase has been
+ *          serviced with DATEND.
+ * @details On this controller DATEND tells the hardware that the data phase
+ *          of the control transfer is over, the status stage is then
+ *          completed by the hardware without generating any further EP0
+ *          event. For a control write (OUT data phase) the status stage is
+ *          an IN zero length packet that the controller sends by itself,
+ *          so usb_lld_start_in() must not arm a second one when the high
+ *          level layer asks for the status packet: the transfer completion
+ *          is synthesized instead.
+ */
+static bool ep0_out_status_pending = false;
+
+#if defined(SK32_USB_TRACE)
+/*===========================================================================*/
+/* USB bring-up trace.                                                        */
+/* An ISR-safe byte ring records raw USB events (EP0 CSR0 snapshots, state    */
+/* machine transitions, transfers arms). The board firmware drains the ring   */
+/* from a thread and prints it on the debug UART. This block is only compiled */
+/* when SK32_USB_TRACE is defined (bring-up aid, normally disabled).          */
+/*===========================================================================*/
+#define USB_TRACE_RING_SIZE          2048U
+
+static volatile uint8_t  usb_trace_ring[USB_TRACE_RING_SIZE];
+static volatile uint16_t usb_trace_wr;
+static volatile uint16_t usb_trace_rd;
+
+static void usb_trace_byte(uint8_t b) {
+  uint16_t wr;
+  uint16_t next;
+
+  wr   = usb_trace_wr;
+  next = (uint16_t)(wr + 1U);
+  if (next >= USB_TRACE_RING_SIZE) {
+    next = 0U;
+  }
+  if (next != usb_trace_rd) {
+    usb_trace_ring[wr] = b;
+    usb_trace_wr       = next;
+  }
+}
+
+static void usb_trace_event(uint8_t tag, uint8_t a, uint8_t b, uint8_t c) {
+  usb_trace_byte(tag);
+  usb_trace_byte(a);
+  usb_trace_byte(b);
+  usb_trace_byte(c);
+}
+
+static uint8_t usb_trace_frame(void) {
+  return SK32_USB->FRAME1;
+}
+
+static void usb_trace_bytes(uint8_t tag, const uint8_t *buf, size_t n) {
+  size_t i;
+  usb_trace_byte(tag);
+  for (i = 0U; i < n; i++) {
+    usb_trace_byte(buf[i]);
+  }
+}
+
+size_t sk32_usb_trace_drain(uint8_t *bp, size_t max) {
+  size_t i;
+
+  i = 0U;
+  while ((i < max) && (usb_trace_rd != usb_trace_wr)) {
+    bp[i] = usb_trace_ring[usb_trace_rd];
+    i++;
+    usb_trace_rd = (uint16_t)(usb_trace_rd + 1U);
+    if (usb_trace_rd >= USB_TRACE_RING_SIZE) {
+      usb_trace_rd = 0U;
+    }
+  }
+  return i;
+}
+
+/* Export a trace emission entry point so board level code (QMK hooks such
+   as matrix_scan_user/process_record_user) can tag application events into
+   the same ring buffer. Only used as a bring-up aid.*/
+void sk32_usb_trace_emit(uint8_t tag, uint8_t a, uint8_t b, uint8_t c) {
+  usb_trace_event(tag, a, b, c);
+}
+#endif /* SK32_USB_TRACE */
+
 /*===========================================================================*/
 /* Driver local functions.                                                   */
 /*===========================================================================*/
@@ -196,6 +281,41 @@ static size_t usb_get_rx_count(void) {
 }
 
 /**
+ * @brief   Decides whether DATEND must be set together with IPKTRD when
+ *          arming an EP0 IN data packet.
+ * @details On this controller the data stage of a control read is closed by
+ *          setting DATEND on the very packet that carries the last data of
+ *          the stage. Until DATEND is set the controller keeps NAKing the
+ *          host's status OUT packet, so the host never gets its
+ *          acknowledgement and eventually resets the bus. DATEND must be set
+ *          when the packet being loaded empties the whole data stage:
+ *          - a short packet (n < MPS, including a terminating zero length
+ *            data packet) always ends the data stage;
+ *          - a full size packet ends the data stage only when it delivers the
+ *            whole requested wLength (no trailing zero length packet will be
+ *            requested by the high level layer afterwards).
+ *
+ * @param[in] usbp      pointer to the @p USBDriver object
+ * @param[in] txsize    total size of the current high level IN transfer
+ * @param[in] left      bytes still to transfer after the packet being armed
+ * @param[in] n         size of the packet being armed
+ * @return              true if DATEND must be set together with IPKTRD.
+ */
+static bool usb_ep0_in_datend(const USBDriver *usbp, size_t txsize,
+                              size_t left, size_t n) {
+  size_t wl;
+
+  if (left > 0U) {
+    return false;
+  }
+  if (n < (size_t)usbp->epc[0]->in_maxsize) {
+    return true;
+  }
+  wl = (size_t)usbp->setup[6] | ((size_t)usbp->setup[7] << 8U);
+  return txsize >= wl;
+}
+
+/**
  * @brief   Common ISR code, IN endpoint transmission.
  * @details Invoked when an IN packet previously loaded with IPKTRD has been
  *          transmitted on the bus. If the transfer has not been completed
@@ -239,11 +359,19 @@ static void usb_serve_in(USBDriver *usbp, usbep_t ep) {
     usb_fifo_write(ep, isp->txbuf, n);
 
     if (ep == 0U) {
-      /* EP0: a short IN packet terminates the data stage.*/
-      if (n < (size_t)epcp->in_maxsize) {
-        SK32_USB->CSR |= SK32_CSR0_DATEND;
+      /* On this controller the data stage of a control read is closed by
+         DATEND set together with the last data packet (a short packet, a
+         full size packet delivering the whole requested wLength or the
+         terminating zero length packet). Without DATEND the controller
+         would keep NAKing the host's status OUT packet and the control
+         transfer would never complete, forcing the host to reset the bus.*/
+      if (usb_ep0_in_datend(usbp, isp->txsize,
+                            (isp->txsize - isp->txcnt) - n, n)) {
+        SK32_USB->CSR |= SK32_CSR0_DATEND | SK32_CSR0_IPKTRD;
       }
-      SK32_USB->CSR |= SK32_CSR0_IPKTRD;
+      else {
+        SK32_USB->CSR |= SK32_CSR0_IPKTRD;
+      }
     }
     else {
       SK32_USB->CSR |= SK32_INCSR1_IPKTRD;
@@ -251,6 +379,9 @@ static void usb_serve_in(USBDriver *usbp, usbep_t ep) {
   }
   else {
     /* Transfer completed, invoking the callback.*/
+#if defined(SK32_USB_TRACE)
+    usb_trace_event('N', (uint8_t)ep, (uint8_t)isp->txlast, 0U);
+#endif
     _usb_isr_invoke_in_cb(usbp, ep);
   }
 }
@@ -300,20 +431,52 @@ static void usb_serve_out(USBDriver *usbp, usbep_t ep) {
 
   /* Reading the received packet from the FIFO.*/
   n = usb_get_rx_count();
-  if (n > 0U) {
+  if ((ep == 0U) && (osp->rxbuf == NULL) && (osp->rxsize == 0U)) {
+    /* Zero sized status stage reception armed by the high level layer: any
+       received byte count is forced to zero (status packets are zero
+       length by definition) so that the counters below cannot underflow
+       and the FIFO is not popped into a NULL buffer.*/
+    n = 0U;
+  }
+  if ((n > 0U) && (osp->rxbuf != NULL)) {
     usb_fifo_read(ep, osp->rxbuf, n);
   }
 
-  /* Servicing OPKTRD, this re-enables the reception of the next packet.*/
+  /* Servicing OPKTRD, this re-enables the reception of the next packet.
+     On EP0 the service of the last packet of the transfer also sets
+     DATEND: the controller then closes the control transfer and handles
+     the status stage by itself without generating any further EP0 event
+     (exactly like the vendor driver does on the last OUT data packet).*/
   if (ep == 0U) {
-    SK32_USB->CSR |= SK32_CSR0_SEROPKTRD;
+    if ((osp->rxbuf == NULL) && (osp->rxsize == 0U)) {
+      /* Host's zero length status packet of a control read transfer: the
+         control transfer is completed on the controller side by DATEND
+         (the packet has already been acknowledged on the bus, this only
+         closes the controller state machine).*/
+      SK32_USB->CSR |= SK32_CSR0_SEROPKTRD | SK32_CSR0_DATEND;
+    }
+    else {
+      if ((n < (size_t)epcp->out_maxsize) || (osp->rxpkts == 1U)) {
+        /* Last packet of the OUT data phase of a control write transfer:
+           DATEND makes the controller send the status IN zero length
+           packet by itself, usb_lld_start_in() will synthesize the
+           transfer completion instead of arming a second packet.*/
+        SK32_USB->CSR |= SK32_CSR0_SEROPKTRD | SK32_CSR0_DATEND;
+        ep0_out_status_pending = true;
+      }
+      else {
+        SK32_USB->CSR |= SK32_CSR0_SEROPKTRD;
+      }
+    }
   }
   else {
     SK32_USB->OUTCSR1 &= (uint8_t)~SK32_OUTCSR1_OPKTRD;
   }
 
   /* Transaction data updated.*/
-  osp->rxbuf += n;
+  if (osp->rxbuf != NULL) {
+    osp->rxbuf += n;
+  }
   osp->rxcnt  += n;
   osp->rxsize -= n;
   osp->rxpkts -= 1U;
@@ -348,6 +511,9 @@ static void usb_serve_ep0_setup(USBDriver *usbp) {
     SK32_USB->CSR |= SK32_CSR0_SEROPKTRD;
     ep0_setup_pending = false;
   }
+#if defined(SK32_USB_TRACE)
+  usb_trace_bytes('S', usbp->setup, 8U);
+#endif
 }
 
 /**
@@ -368,6 +534,15 @@ static void usb_serve_ep0(USBDriver *usbp) {
 
   old_index = usb_ep_select(0);
   csr = SK32_USB->CSR;
+#if defined(SK32_USB_TRACE)
+  /* The event carries the received byte count (EP0 packets are at most 64
+     bytes so the low byte is enough) instead of the frame number; the
+     paired 'X' event still records the frame number. The count allows the
+     trace parser to tell a genuine zero length OUT status packet (count 0)
+     from the 8 bytes SETUP of the next control transfer (count 8).*/
+  usb_trace_event('E', csr, (uint8_t)usbp->ep0state,
+                  (uint8_t)usb_get_rx_count());
+#endif
 
   /* SETUPEND is set when a new SETUP packet has aborted an ongoing control
      transfer before DATAEND. It must be serviced and it also tells us that
@@ -395,7 +570,23 @@ static void usb_serve_ep0(USBDriver *usbp) {
       usb_serve_ep0_setup(usbp);
     }
     else {
-      usb_serve_out(usbp, 0);
+      const USBOutEndpointState *osp0 = usbp->epc[0]->out_state;
+
+      if ((usb_get_rx_count() == 8U) &&
+          (osp0->rxbuf == NULL) && (osp0->rxsize == 0U)) {
+        /* The high level layer armed EP0 to receive the zero length OUT
+           status packet of a control read. When the last IN data packet was
+           armed with DATAEND the musbfsfc core swallows the host's status
+           ZLP without raising OPKTRD, so the 8 bytes packet received here
+           is actually the SETUP packet of the next control transfer.
+           Dispatch it to the setup handler instead of discarding it as a
+           spurious data packet: the generic state machine aborts the
+           previous (already completed on the controller side) transfer.*/
+        usb_serve_ep0_setup(usbp);
+      }
+      else {
+        usb_serve_out(usbp, 0);
+      }
     }
   }
   else {
@@ -404,6 +595,19 @@ static void usb_serve_ep0(USBDriver *usbp) {
     usb_serve_in(usbp, 0);
   }
 
+#if defined(SK32_USB_TRACE)
+  {
+    uint8_t csrx;
+    uint8_t idx;
+
+    /* CSR0 is valid only while the INDEX register selects EP0.*/
+    idx = SK32_USB->INDEX;
+    SK32_USB->INDEX = 0U;
+    csrx = SK32_USB->CSR;
+    SK32_USB->INDEX = idx;
+    usb_trace_event('X', csrx, (uint8_t)usbp->ep0state, usb_trace_frame());
+  }
+#endif
   SK32_USB->INDEX = old_index;
 }
 
@@ -436,6 +640,9 @@ OSAL_IRQ_HANDLER(SK32_USB_HANDLER) {
      and the high level driver is reset (this re-initializes EP0).*/
   if ((is & SK32_INTRUSB_RESET) != 0U) {
     old_index = SK32_USB->INDEX;
+#if defined(SK32_USB_TRACE)
+    usb_trace_event('R', is, (uint8_t)usbp->ep0state, usb_trace_frame());
+#endif
 
     /* Only EP0 remains enabled, all the other endpoint interrupt sources
        are disabled.*/
@@ -466,11 +673,17 @@ OSAL_IRQ_HANDLER(SK32_USB_HANDLER) {
 
   /* USB bus SUSPEND condition handling.*/
   if ((is & SK32_INTRUSB_SUS) != 0U) {
+#if defined(SK32_USB_TRACE)
+    usb_trace_event('Z', is, (uint8_t)usbp->ep0state, 0U);
+#endif
     _usb_suspend(usbp);
   }
 
   /* USB bus RESUME condition handling.*/
   if ((is & SK32_INTRUSB_RESUME) != 0U) {
+#if defined(SK32_USB_TRACE)
+    usb_trace_event('W', is, (uint8_t)usbp->ep0state, 0U);
+#endif
     _usb_wakeup(usbp);
   }
 
@@ -581,6 +794,15 @@ void usb_lld_start(USBDriver *usbp) {
                        ((uint32_t)0x3U << 22U) | ((uint32_t)0x3U << 24U);
       GPIOA->PUPDR   &= ~((uint32_t)0x3U << 22U) &
                         ~((uint32_t)0x3U << 24U);
+      /* Strong drive current (level 7) for the PA11/PA12 pads. The SK32
+         specific DCR (drive current configuration) register selects the pad
+         output current, OSPEEDR only selects the edge speed. The vendor BSP
+         programs the maximum level on the USB pads; leaving the default weak
+         level degrades the full speed signaling and the host fails to receive
+         the device responses during enumeration.*/
+      GPIOA->DCR[1] = (GPIOA->DCR[1] & ~((uint32_t)0x7U << 12U) &
+                       ~((uint32_t)0x7U << 16U)) |
+                      ((uint32_t)0x7U << 12U) | ((uint32_t)0x7U << 16U);
 
       /* USB peripheral clock activation and reset.*/
       rccEnableUSB(true);
@@ -601,6 +823,9 @@ void usb_lld_start(USBDriver *usbp) {
 
     /* Reset procedure enforced on driver start (initializes EP0).*/
     usb_lld_reset(usbp);
+#if defined(SK32_USB_TRACE)
+    usb_trace_event('C', (uint8_t)usbp->state, 0U, 0U);
+#endif
   }
 }
 
@@ -650,6 +875,12 @@ void usb_lld_reset(USBDriver *usbp) {
 
   /* Post reset initialization.*/
   SK32_USB->FADDR = 0U;
+
+  /* A bus reset aborts any ongoing control transfer: the EP0 software state
+     flags are cleared so that a stale flag cannot corrupt the next control
+     transfer serviced after the reset.*/
+  ep0_setup_pending = false;
+  ep0_out_status_pending = false;
 
   /* Suspend detection enabled (the suspend mode entry is reported through
      INTRUSB.SUS).*/
@@ -889,6 +1120,12 @@ void usb_lld_read_setup(USBDriver *usbp, usbep_t ep, uint8_t *buf) {
   if (ep0_setup_pending) {
     old_index = usb_ep_select(0);
     SK32_USB->CSR |= SK32_CSR0_SEROPKTRD;
+#if defined(SK32_USB_TRACE)
+    {
+      uint8_t csrv = SK32_USB->CSR;
+      usb_trace_event('K', csrv, (uint8_t)usbp->ep0state, 0U);
+    }
+#endif
     SK32_USB->INDEX = old_index;
     ep0_setup_pending = false;
   }
@@ -928,6 +1165,23 @@ void usb_lld_start_out(USBDriver *usbp, usbep_t ep) {
     SK32_USB->INTROUT1E |= (uint8_t)(1U << ep);
     SK32_USB->INDEX = old_index;
   }
+#if defined(SK32_USB_TRACE)
+  if (ep == 0U) {
+    uint8_t csra;
+    uint8_t idxa;
+
+    idxa = SK32_USB->INDEX;
+    SK32_USB->INDEX = 0U;
+    csra = SK32_USB->CSR;
+    SK32_USB->INDEX = idxa;
+    usb_trace_event('O', (uint8_t)osp->rxsize, (uint8_t)usbp->ep0state,
+                    (uint8_t)osp->rxpkts);
+    if (osp->rxsize == 0U) {
+      /* Snapshot of CSR0 right after arming the EP0 status ZLP receive. */
+      usb_trace_event('A', csra, (uint8_t)usbp->ep0state, usb_trace_frame());
+    }
+  }
+#endif
 }
 
 /**
@@ -957,19 +1211,54 @@ void usb_lld_start_in(USBDriver *usbp, usbep_t ep) {
 
   old_index = usb_ep_select(ep);
   if (ep == 0U) {
-    /* EP0: a zero length packet (status stage ZLP or terminating ZLP of the
-       data stage) or a short IN packet carries DATAEND, ending the data
-       stage.*/
-    if (n < (size_t)usbp->epc[ep]->in_maxsize) {
-      SK32_USB->CSR |= SK32_CSR0_DATEND;
+    if (ep0_out_status_pending) {
+      /* Control write transfer with an OUT data phase: DATEND was already
+         set when the last OUT data packet was serviced in usb_serve_out(),
+         the status IN zero length packet is sent by the hardware on its
+         own. The transfer completion is synthesized here instead of arming
+         a duplicate status packet (the EP0 event eventually generated by
+         the hardware when the status packet has been sent is ignored
+         because there is no transmit pending anymore).*/
+      ep0_out_status_pending = false;
+#if defined(SK32_USB_TRACE)
+      usb_trace_event('Y', (uint8_t)usbp->ep0state, 0U, 0U);
+#endif
+      SK32_USB->INDEX = old_index;
+      _usb_isr_invoke_in_cb(usbp, ep);
+      return;
     }
-    SK32_USB->CSR |= SK32_CSR0_IPKTRD;
+    if ((n == 0U) && (usbp->ep0state == USB_EP0_IN_SENDING_STS)) {
+      /* Zero length status packet of a control write transfer: DATEND makes
+         the hardware send the packet and close the control transfer, the
+         completion is then reported through the regular EP0 IN event.*/
+      SK32_USB->CSR |= SK32_CSR0_DATEND | SK32_CSR0_IPKTRD;
+    }
+    else {
+      /* Data stage packet (full size, short packet or zero length packet
+         terminating the data phase of a control read): when this packet
+         closes the whole data stage DATEND is set together with IPKTRD so
+         that the controller stops NAKing the host's status OUT packet and
+         completes the control transfer (see usb_ep0_in_datend()).*/
+      if (usb_ep0_in_datend(usbp, isp->txsize,
+                            isp->txsize - isp->txcnt - isp->txlast, n)) {
+        SK32_USB->CSR |= SK32_CSR0_DATEND | SK32_CSR0_IPKTRD;
+      }
+      else {
+        SK32_USB->CSR |= SK32_CSR0_IPKTRD;
+      }
+    }
   }
   else {
     /* Regular IN endpoint: an empty FIFO with IPKTRD set transmits a zero
        length packet.*/
     SK32_USB->CSR |= SK32_INCSR1_IPKTRD;
   }
+#if defined(SK32_USB_TRACE)
+  if (ep == 0U) {
+    uint8_t csrv = SK32_USB->CSR; /* CSR0, INDEX still selects EP0. */
+    usb_trace_event('I', (uint8_t)n, (uint8_t)usbp->ep0state, csrv);
+  }
+#endif
   SK32_USB->INDEX = old_index;
 }
 

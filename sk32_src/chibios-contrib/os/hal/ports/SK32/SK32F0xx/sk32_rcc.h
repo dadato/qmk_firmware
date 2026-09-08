@@ -364,9 +364,14 @@
 
 /**
  * @brief   Resets the I2C1 peripheral.
+ * @note    The SK32 CMSIS header does not define RCC_APB1RSTR_I2C1RST, the
+ *          reset bit is aliased to the (bit-identical) enable bit value.
  *
  * @api
  */
+#if !defined(RCC_APB1RSTR_I2C1RST)
+#define RCC_APB1RSTR_I2C1RST                 RCC_APB1ENR_I2C1RST
+#endif
 #define rccResetI2C1() rccResetAPB1(RCC_APB1RSTR_I2C1RST)
 
 /**
