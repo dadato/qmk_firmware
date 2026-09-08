@@ -16,9 +16,28 @@
 
 #pragma once
 
-/* The SK32F077 USB low level driver (hal_usb_lld.c) is compiled and linked by
- * this demo build (the QMK ChibiOS protocol layer requires the USB HAL types).
- * The USB device itself is not exercised: bring-up on hardware is a later
- * step, so no keyboard feature depends on a working USB connection here. */
+/* SK32F077 HAL configuration override for the QMK ChibiOS build.  The
+ * platform common halconf.h enables the USB device driver used by the QMK
+ * HID keyboard; the settings below only add bring-up test extras. */
 
 #include_next <halconf.h>
+
+/* Production firmware keeps the default HAL configuration (HAL_USE_SERIAL is
+ * FALSE, no USB trace): the onekey only needs the USB device driver, which is
+ * enabled by the common platform halconf.h.
+ *
+ * Bring-up mode (rules.mk: SK32_BRINGUP_TESTS=yes) additionally enables:
+ *   - HAL_USE_SERIAL: USART1 (PA0=TX / PA1=RX, alternate function 10) used by
+ *     the 'alive' heartbeat / trace-drain test thread;
+ *   - SK32_USB_TRACE: the ISR event ring recorder inside the SK32 USB low
+ *     level driver (hal_usb_lld.c).  Remove/disables once bring-up is done.
+ *
+ * The native SK32 I2C1 driver (hal_i2c_lld.c) is compiled out by default:
+ * it is only included when both HAL_USE_I2C and SK32_I2C_USE_I2C1 are set to
+ * TRUE (see the GENERIC_SK32_F077 board mcuconf.h). */
+#if defined(SK32_BRINGUP_TESTS)
+#    undef HAL_USE_SERIAL
+#    define HAL_USE_SERIAL TRUE
+
+#    define SK32_USB_TRACE 1
+#endif /* SK32_BRINGUP_TESTS */

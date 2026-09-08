@@ -24,14 +24,16 @@
  * Note that the settings for each driver only have effect if the whole
  * driver is enabled in halconf.h.
  *
- * The SK32F0xx family is register-compatible with STM32F072 except for
- * the USB IP.  The SK32 port provides native drivers for the core platform
- * (clocks, SysTick-based ST, ISR aggregation, GPIO/PAL, USB) and reuses the
- * shared ChibiOS STM32 low level drivers (TIMv1, USARTv2, ADCv1, SPIv2,
- * I2Cv2, ...) for the remaining peripherals.  This mcuconf.h must therefore
- * satisfy two naming schemes:
- *   - SK32F0xx_MCUCONF + the SK32_* clock/ST settings (used by the SK32 HAL
- *     low level drivers), and
+ * The SK32F0xx family is register-compatible with STM32F072 except for the
+ * USB IP (musbfsfc) and the peripheral set: the SK32F077 variant does not
+ * have the TIM1, TIM2, SPI2 and I2C2 units (see the SK32_HAS_* macros in
+ * sk32_registry.h).  The SK32 port provides native drivers for the core
+ * platform (clocks, SysTick-based ST, ISR aggregation, GPIO/PAL, USB,
+ * USART serial, SPI and I2C) and reuses the shared ChibiOS STM32 low level
+ * drivers (TIMv1, ADCv1, ...) for the remaining peripherals.  This
+ * mcuconf.h must therefore satisfy two naming schemes:
+ *   - SK32F0xx_MCUCONF + the SK32_* clock/ST/peripheral settings (used by
+ *     the SK32 native low level drivers), and
  *   - STM32F0xx_MCUCONF + the STM32_* settings consumed by the shared
  *     ChibiOS STM32 low level drivers.
  *
@@ -80,7 +82,9 @@
 #define STM32_PLLNODIV                      STM32_PLLNODIV_DIV2
 #define STM32_USBSW                         STM32_USBSW_HSI48
 #define STM32_CECSW                         STM32_CECSW_HSI
-#define STM32_I2C1SW                        STM32_I2C1SW_HSI
+/* No STM32_I2C1SW setting: the SK32 CFGR3 has no I2C1 clock selection bits,
+   the I2C1 input clock is fixed (analyzed as the 8MHz HSI, see the SK32 I2C
+   driver settings below).*/
 #define STM32_USART1SW                      STM32_USART1SW_PCLK
 #define STM32_RTCSEL                        STM32_RTCSEL_LSI
 
@@ -124,106 +128,109 @@
 
 /*
  * GPT driver system settings.
+ * The SK32F077 variant has the TIM3, TIM6, TIM16 and TIM17 timers only,
+ * the TIM1/TIM2 units are not present (see SK32_HAS_TIM* in the registry)
+ * so they are not configured here.
  */
-#define STM32_GPT_USE_TIM1                  FALSE
-#define STM32_GPT_USE_TIM2                  FALSE
 #define STM32_GPT_USE_TIM3                  FALSE
 #define STM32_GPT_USE_TIM6                  FALSE
-#define STM32_GPT_USE_TIM14                 FALSE
-#define STM32_GPT_TIM1_IRQ_PRIORITY         2
-#define STM32_GPT_TIM2_IRQ_PRIORITY         2
+#define STM32_GPT_USE_TIM16                 FALSE
+#define STM32_GPT_USE_TIM17                 FALSE
 #define STM32_GPT_TIM3_IRQ_PRIORITY         2
 #define STM32_GPT_TIM6_IRQ_PRIORITY         2
-#define STM32_GPT_TIM14_IRQ_PRIORITY        2
+#define STM32_GPT_TIM16_IRQ_PRIORITY        2
+#define STM32_GPT_TIM17_IRQ_PRIORITY        2
 
 /*
  * I2C driver system settings.
+ * The SK32 I2C is a legacy CR1/CR2/SR1/SR2/DR/CCR unit (no TRISE register)
+ * served by the native interrupt-driven SK32 driver; the shared STM32
+ * I2Cv1/I2Cv2 LLDs are not usable on this platform (TRISE access, DMA
+ * streams and the EV/ER IRQ split do not apply).  The I2C1 input clock is
+ * fixed: the CFGR3 register has no I2C1SW bits and the clock is analyzed as
+ * the 8MHz HSI for the CCR/FREQ computation (to be validated on hardware).
+ * I2C1 is wired to PB6 (SCL) and PB7 (SDA), alternate function 1.
+ * SK32_I2C_USE_I2C1 defaults to FALSE: the native driver (hal_i2c_lld.c)
+ * is only pulled into the build when HAL_USE_I2C is TRUE in halconf.h, in
+ * which case this switch must also be set to TRUE.
  */
-#define STM32_I2C_USE_I2C1                  FALSE
-#define STM32_I2C_USE_I2C2                  FALSE
-#define STM32_I2C_BUSY_TIMEOUT              50
-#define STM32_I2C_I2C1_IRQ_PRIORITY         3
-#define STM32_I2C_I2C2_IRQ_PRIORITY         3
-#define STM32_I2C_USE_DMA                   TRUE
-#define STM32_I2C_I2C1_DMA_PRIORITY         1
-#define STM32_I2C_I2C2_DMA_PRIORITY         1
-#define STM32_I2C_I2C1_RX_DMA_STREAM        STM32_DMA_STREAM_ID(1, 3)
-#define STM32_I2C_I2C1_TX_DMA_STREAM        STM32_DMA_STREAM_ID(1, 2)
-#define STM32_I2C_I2C2_RX_DMA_STREAM        STM32_DMA_STREAM_ID(1, 5)
-#define STM32_I2C_I2C2_TX_DMA_STREAM        STM32_DMA_STREAM_ID(1, 4)
-#define STM32_I2C_DMA_ERROR_HOOK(i2cp)      osalSysHalt("DMA failure")
+#define SK32_I2C_USE_I2C1                   FALSE
+#define SK32_I2C_I2C1_PRIORITY              3
+#define SK32_I2C_BUSY_TIMEOUT               50
 
 /*
  * I2S driver system settings.
+ * I2S is implemented on the SPI2 peripheral which is not present on the
+ * SK32F077 variant, only the (dummy) SPI1 based settings are kept.
  */
 #define STM32_I2S_USE_SPI1                  FALSE
-#define STM32_I2S_USE_SPI2                  FALSE
 #define STM32_I2S_SPI1_MODE                 (STM32_I2S_MODE_MASTER |        \
                                              STM32_I2S_MODE_RX)
-#define STM32_I2S_SPI2_MODE                 (STM32_I2S_MODE_MASTER |        \
-                                             STM32_I2S_MODE_RX)
 #define STM32_I2S_SPI1_IRQ_PRIORITY         2
-#define STM32_I2S_SPI2_IRQ_PRIORITY         2
 #define STM32_I2S_SPI1_DMA_PRIORITY         1
-#define STM32_I2S_SPI2_DMA_PRIORITY         1
 #define STM32_I2S_SPI1_RX_DMA_STREAM        STM32_DMA_STREAM_ID(1, 2)
 #define STM32_I2S_SPI1_TX_DMA_STREAM        STM32_DMA_STREAM_ID(1, 3)
-#define STM32_I2S_SPI2_RX_DMA_STREAM        STM32_DMA_STREAM_ID(1, 4)
-#define STM32_I2S_SPI2_TX_DMA_STREAM        STM32_DMA_STREAM_ID(1, 5)
 #define STM32_I2S_DMA_ERROR_HOOK(i2sp)      osalSysHalt("DMA failure")
 
 /*
  * ICU driver system settings.
+ * Only the TIM3 unit is kept, TIM1/TIM2 are not present on the SK32F077
+ * variant and the shared ICU LLD does not support the TIM16/TIM17 units.
  */
-#define STM32_ICU_USE_TIM1                  FALSE
-#define STM32_ICU_USE_TIM2                  FALSE
 #define STM32_ICU_USE_TIM3                  FALSE
-#define STM32_ICU_TIM1_IRQ_PRIORITY         3
-#define STM32_ICU_TIM2_IRQ_PRIORITY         3
 #define STM32_ICU_TIM3_IRQ_PRIORITY         3
 
 /*
  * PWM driver system settings.
+ * The SK32F077 variant has the TIM3, TIM16 and TIM17 timers only, TIM1/TIM2
+ * are not present so they are not configured here.
  */
 #define STM32_PWM_USE_ADVANCED              FALSE
-#define STM32_PWM_USE_TIM1                  FALSE
-#define STM32_PWM_USE_TIM2                  FALSE
 #define STM32_PWM_USE_TIM3                  FALSE
-#define STM32_PWM_TIM1_IRQ_PRIORITY         3
-#define STM32_PWM_TIM2_IRQ_PRIORITY         3
+#define STM32_PWM_USE_TIM16                 FALSE
+#define STM32_PWM_USE_TIM17                 FALSE
 #define STM32_PWM_TIM3_IRQ_PRIORITY         3
+#define STM32_PWM_TIM16_IRQ_PRIORITY        3
+#define STM32_PWM_TIM17_IRQ_PRIORITY        3
 
 /*
  * SERIAL driver system settings.
  * The SK32 native serial driver (SR/DR USART) is selected through the
- * SK32_SERIAL_USE_USARTx switches, USART2 is mapped on PA2/PA3 (alternate 1)
- * as documented in board.h.
+ * SK32_SERIAL_USE_USARTx switches.  USART1 is wired to PA0 (TX) and PA1
+ * (RX) through alternate function 10 on the onekey board and is used as a
+ * debug heartbeat output; USART2 (PA2/PA3, alternate 1) is not used.
  */
-#define SK32_SERIAL_USE_USART1              FALSE
-#define SK32_SERIAL_USE_USART2              TRUE
+#define SK32_SERIAL_USE_USART1              TRUE
+#define SK32_SERIAL_USE_USART2              FALSE
 #define SK32_SERIAL_USART1_PRIORITY         3
 #define SK32_SERIAL_USART2_PRIORITY         3
 
 /*
  * SPI driver system settings.
+ * The SK32 SPI is a legacy CR1/CR2/SR/DR unit (SPIv1 class) served by the
+ * native interrupt-driven SK32 driver selected through the SK32_SPI_USE_SPIx
+ * switches; the shared STM32 SPIv2 LLD is not part of this platform.  The
+ * SPI2 unit is not present on the SK32F077 variant and is not configured.
  */
+#define SK32_SPI_USE_SPI1                   FALSE
+#define SK32_SPI_USE_SPI2                   FALSE
+#define SK32_SPI_SPI1_PRIORITY              3
+#define SK32_SPI_SPI2_PRIORITY              3
 #define STM32_SPI_USE_SPI1                  FALSE
-#define STM32_SPI_USE_SPI2                  FALSE
 #define STM32_SPI_SPI1_DMA_PRIORITY         1
-#define STM32_SPI_SPI2_DMA_PRIORITY         1
 #define STM32_SPI_SPI1_IRQ_PRIORITY         2
-#define STM32_SPI_SPI2_IRQ_PRIORITY         2
 #define STM32_SPI_SPI1_RX_DMA_STREAM        STM32_DMA_STREAM_ID(1, 2)
 #define STM32_SPI_SPI1_TX_DMA_STREAM        STM32_DMA_STREAM_ID(1, 3)
-#define STM32_SPI_SPI2_RX_DMA_STREAM        STM32_DMA_STREAM_ID(1, 4)
-#define STM32_SPI_SPI2_TX_DMA_STREAM        STM32_DMA_STREAM_ID(1, 5)
 #define STM32_SPI_DMA_ERROR_HOOK(spip)      osalSysHalt("DMA failure")
 
 /*
  * ST driver system settings.
+ * The shared STM32 ST driver is not used by this port (native SysTick based
+ * ST) but its TIM2 reference would name a timer that is not present on the
+ * SK32F077 variant, it is aligned to the available TIM3 unit.
  */
 #define STM32_ST_IRQ_PRIORITY               2
-#define STM32_ST_USE_TIMER                  2
+#define STM32_ST_USE_TIMER                  3
 
 /*
  * SK32 ST driver system settings.
