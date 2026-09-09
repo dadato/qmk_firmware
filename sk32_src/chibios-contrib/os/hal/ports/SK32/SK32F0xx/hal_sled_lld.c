@@ -172,28 +172,6 @@ static msg_t sled_lld_wait_reset_done(sled_group_t group) {
 }
 
 /**
- * @brief   Waits for the shift registers of a group to be empty.
- *
- * @param[in] group     the SLED group index
- * @retval              The operation result.
- * @retval MSG_OK       the SLED is idle.
- * @retval MSG_TIMEOUT  the SLED stayed busy.
- */
-static msg_t sled_lld_wait_idle(sled_group_t group) {
-  uint32_t mask = sled_lld_busy_mask(group);
-  int      tmo  = SK32_SLED_BUSY_TIMEOUT;
-
-  while ((SLED->SR & mask) != 0U) {
-    if (tmo-- <= 0) {
-      return MSG_TIMEOUT;
-    }
-    chThdSleepMilliseconds(1);
-  }
-
-  return MSG_OK;
-}
-
-/**
  * @brief   Routes a DMA1 channel to the SLED group request line.
  * @note    The remapping code is written into the 6 request bits of the
  *          channel slot of the SYSCFG CFGR3 register, following the vendor
@@ -410,13 +388,14 @@ msg_t sled_lld_send_bytes(sled_group_t group, const uint8_t *data,
     return MSG_RESET;
   }
 
-  /* Waiting for any previous reset pulse to be completed and for the shift
-     registers to be drained before reloading the FIFO.*/
+  /* Waiting for the previous frame (data plus its trailing reset pulse) to
+     be completed: the RSTSTRx bit is cleared by the hardware when the reset
+     code has been emitted.  This is the same synchronization used by the
+     vendor SLED_updata() (while (SLED->CR & RSTSTRx) ;).  Note that the BUSY
+     flag is not suited for this wait: per the user guide the block keeps
+     outputting the IDLE code with BUSY stuck high when the FIFO and the
+     shift register are empty and RSTSTR is 0.*/
   ret = sled_lld_wait_reset_done(group);
-  if (ret != MSG_OK) {
-    return ret;
-  }
-  ret = sled_lld_wait_idle(group);
   if (ret != MSG_OK) {
     return ret;
   }

@@ -218,9 +218,13 @@
 /*
  * SLED driver system settings.
  * The SK32 SLED driver (hal_sled_lld.c) is enabled through the HAL_USE_SLED
- * switch in halconf.h: it allocates the DMA1 channel 1 for the SLED1 group
- * and routes it to the SLED request line through the SYSCFG CFGR3 remapping.
- * The output pad (PB8, alternate function 14) is configured by main.c.
+ * switch in halconf.h.  It allocates one DMA1 channel per compiled group
+ * (channel 1 for the SLED1 registers, channel 2 for the SLED2 registers)
+ * and routes each channel to its SLED request line through the SYSCFG CFGR3
+ * remapping.  This test drives the PC0 pad = datasheet SLED1_CH0 output,
+ * which is served by the SLED2 channel registers (DR[1]/DMAEN2/RSTSTR2);
+ * the Makefile therefore adds -DSK32_SLED_USE_SLED2=TRUE.  The pad (PC0,
+ * alternate function 14) is configured by main.c.
  */
 #define STM32_SPI_USE_SPI1                  FALSE
 #define STM32_SPI_USE_SPI2                  FALSE

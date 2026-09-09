@@ -151,6 +151,12 @@ CPPWARN = -Wall -Wextra -Wundef
 # List all user C define here, like -D_DEBUG=1
 UDEFS = -DSK32F077xB
 
+# The SLED low level driver compiles the SLED1 group by default
+# (SK32_SLED_USE_SLED1=TRUE).  This test drives the PC0 pad, which is the
+# datasheet SLED1_CH0 output served by the SLED2 channel registers
+# (DR[1]/DMAEN2/RSTSTR2), so the SLED2 group must be compiled in as well.
+UDEFS += -DSK32_SLED_USE_SLED2=TRUE
+
 # Define ASM defines here
 UADEFS = -DSK32F077xB
 

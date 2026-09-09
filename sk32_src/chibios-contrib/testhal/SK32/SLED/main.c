@@ -20,47 +20,48 @@
 #include "hal_sled_lld.h"
 
 /*===========================================================================*/
-/* SLED1 frame test on the GENERIC_SK32_F077 board.                          */
+/* SLED1/SLED2 frame test on the GENERIC_SK32_F077 board.                    */
 /*===========================================================================*/
 
 /*
- * Test resources used by this test:
+ * Output pads used by this test:
  *
- *  - PC0 (SLED1_CH0 group output), alternate function 14.  A WS2812/SK6812
- *    string (at least one LED) must be wired to the pad: the SLED block
- *    serializes every data byte into one channel byte, so the three byte
- *    frame below programs a single LED (wire order GRB, no bit packing).
- *  - PB14 / PB15: two board LEDs wired to push-pull outputs, the PAL
- *    abstraction drives them high (PAL_HIGH) to switch the LEDs on.
+ *  - PB8 = SLED0_CH0 output pad (datasheet pad naming, alternate function
+ *    14).  This is the pad driven by the 3Think RGBKeyboard reference
+ *    project (User/Src/sled.c: PB8, GPIO_AF_14) through the SLED1 channel
+ *    registers (DR[0]/DMAEN1/RSTSTR1, DMA1 channel 1, request SLED_G1),
+ *    so it is used here as the reference group: if the driver and the
+ *    timing configuration are right, the vendor proven pad must show a
+ *    frame waveform.
+ *  - PC0 = SLED1_CH0 output pad (datasheet pad naming, alternate function
+ *    14).  The datasheet names the two pad groups SLED0_CHx / SLED1_CHx
+ *    while the registers name the data paths "SLED1 channel" (DR[0],
+ *    DMAEN1, RSTSTR1, request SLED_G1) and "SLED2 channel" (DR[1], DMAEN2,
+ *    RSTSTR2, request SLED_G2): as the vendor drives the SLED0_CHx pad
+ *    PB8 through DR[0], the SLED1_CHx pads (PC0..PC3) are served by the
+ *    SLED2 channel registers (DR[1]/DMAEN2/RSTSTR2).  The frames of this
+ *    group are therefore sent through the SLED2 group.
+ *  - PB14 / PB15: two board LEDs used as per-group status indicators
+ *    (PB14 = SLED1 group on PB8, PB15 = SLED2 group on PC0).
+ *
+ * A WS2812/SK6812 string (at least one LED) must be wired to the pad under
+ * test, or the pad itself probed with a scope/logic analyzer: the SLED
+ * block serializes every data byte into one channel byte, so the three byte
+ * frame below programs a single LED (wire order GRB, no bit packing).
  *
  * Test procedure:
- *  - The SLED1 output pad is routed to alternate function 14 and the SLED
- *    subsystem is started with the vendor RGBKeyboardSTK time codes
- *    (T0H=4, T1H=15, TRST=80 cycles, clock /4, baud /32).
- *  - A one LED frame is sent every 300ms through @p sled_lld_send_bytes()
- *    cycling through pure green, pure red and pure blue; a successful
- *    synchronous frame transfer is acknowledged when the function returns
- *    @p MSG_OK, which also means the whole frame including the reset pulse
- *    has been shifted out.
- *  - PB15 is toggled after every successful frame (visible blinking) while
- *    PB14 provides a 1 Hz heartbeat.
- *  - On the first failure (frame not acknowledged in time) both LEDs are
- *    switched on solid and the system halts.
+ *  - Both pads are routed to alternate function 14 and the SLED subsystem
+ *    is started with the vendor RGBKeyboardSTK time codes (T0H=4, T1H=15,
+ *    TRST=80 cycles, clock /4, baud /32).
+ *  - Every ~200 ms a one LED frame is sent through @p sled_lld_send_bytes()
+ *    on the SLED2 group (PC0) followed by one on the SLED1 group (PB8).
+ *    The function is synchronous and returns @p MSG_OK only when the whole
+ *    frame including the reset pulse has been shifted out.
+ *  - The LED of a group is toggled after every successful frame and driven
+ *    solid HIGH after the first timeout of that group, so a healthy group
+ *    blinks while a failing one is steady ON (the test never halts, both
+ *    pads keep being driven so the waveforms can be observed).
  */
-
-/* Blinker thread, times are in milliseconds. */
-static THD_WORKING_AREA(waBlinkThread, 128);
-static THD_FUNCTION(BlinkThread, arg) {
-  (void)arg;
-  chRegSetThreadName("led-blink");
-  while (true) {
-    palSetPad(GPIOB, GPIOB_PIN14);
-    chThdSleepMilliseconds(500);
-
-    palClearPad(GPIOB, GPIOB_PIN14);
-    chThdSleepMilliseconds(500);
-  }
-}
 
 /*
  * Application entry point.
@@ -68,8 +69,8 @@ static THD_FUNCTION(BlinkThread, arg) {
 int main(void) {
 
   /* One WS2812 color frame (3 bytes, GRB wire order) programmed with the
-     vendor time codes used by the 3Think RGBKeyboardSTK reference. */
-  static const SLEDConfig sled1_cfg = {
+     vendor time codes used by the 3Think RGBKeyboard reference. */
+  static const SLEDConfig sled_cfg = {
     .t0h_cycles      = 4U,
     .t1h_cycles      = 15U,
     .trst_cycles     = 80U,
@@ -85,9 +86,11 @@ int main(void) {
     {0x00U, 0xFFU, 0x00U},        /* Red.                                    */
     {0x00U, 0x00U, 0xFFU}         /* Blue.                                   */
   };
-  uint8_t frame[3];
+  uint8_t frame_pb8[3];
+  uint8_t frame_pc0[3];
   unsigned phase = 0U;
-  bool     led   = false;
+  bool     led_pb8  = false;
+  bool     led_pc0  = false;
 
   /*
    * System initializations.
@@ -106,53 +109,77 @@ int main(void) {
   palClearPad(GPIOB, GPIOB_PIN15);
 
   /*
-   * Creating the LED blinker thread.
+   * Output pad setup on alternate function 14 (the AF used by the vendor
+   * RGBKeyboard sled.c on PB8):
+   *  - PB8 = SLED0_CH0, served by the SLED1 channel registers (DR[0]).
+   *  - PC0 = SLED1_CH0, served by the SLED2 channel registers (DR[1]).
+   * The SLED low level driver does not configure the pads, so both are
+   * routed here before the subsystem is started.
    */
-  chThdCreateStatic(waBlinkThread, sizeof(waBlinkThread), NORMALPRIO,
-                    BlinkThread, NULL);
-
-  /*
-   * SLED1 pads setup on alternate function 14:
-   *  - PC0 = SLED1_CH0 data output (drives the external WS2812 string).
-   */
+  palSetPadMode(GPIOB, 8U, PAL_MODE_ALTERNATE(14) |
+                           PAL_SK32_OSPEED_HIGHEST);
   palSetPadMode(GPIOC, 0U, PAL_MODE_ALTERNATE(14) |
                            PAL_SK32_OSPEED_HIGHEST);
 
   /*
    * Starting the SLED subsystem: the native low level driver programs the
-   * TCR/CDR time codes, allocates the DMA1 channel 1, routes it to the SLED1
-   * request line through the SYSCFG CFGR3 remapping and enables the block.
+   * TCR/CDR time codes, allocates the DMA1 channels of the enabled groups
+   * (channel 1 for SLED1, channel 2 for SLED2), routes them to the SLED
+   * request lines through the SYSCFG CFGR3 remapping (SLED_G1/SLED_G2) and
+   * enables the block.  Both groups must be compiled in: SLED1 by default
+   * and SLED2 through SK32_SLED_USE_SLED2=TRUE (see the Makefile).
    */
   sled_lld_init();
-  sled_lld_start(&sled1_cfg);
+  sled_lld_start(&sled_cfg);
 
   /*
-   * Running the frame test forever.
+   * Running the frame test forever.  Each 200 ms iteration programs one LED
+   * per group; PB14 blinks when the SLED1 (PB8) frames are acknowledged,
+   * PB15 blinks when the SLED2 (PC0) frames are acknowledged, a steady ON
+   * LED marks a group whose last frame timed out.
    */
   while (true) {
-    /* Programming the color of the single LED and sending the frame.  The
-       call is synchronous and returns MSG_OK only when the whole frame (data
-       plus the trailing reset pulse) has been shifted out.*/
-    frame[0] = colors[phase][0];
-    frame[1] = colors[phase][1];
-    frame[2] = colors[phase][2];
-    if (sled_lld_send_bytes(SLED1, frame, sizeof(frame)) != MSG_OK) {
-      palSetPad(GPIOB, GPIOB_PIN14);
-      palSetPad(GPIOB, GPIOB_PIN15);
-      chSysHalt("SLED1 frame FAIL");
-    }
-
-    /* Signaling a successful frame with a PB15 toggle.*/
-    if (led) {
-      palClearPad(GPIOB, GPIOB_PIN15);
-      led = false;
+    /* SLED2 group frame on PC0: color = phase (GRB).*/
+    frame_pc0[0] = colors[phase][0];
+    frame_pc0[1] = colors[phase][1];
+    frame_pc0[2] = colors[phase][2];
+    if (sled_lld_send_bytes(SLED2, frame_pc0, sizeof(frame_pc0)) == MSG_OK) {
+      if (led_pc0) {
+        palClearPad(GPIOB, GPIOB_PIN15);
+        led_pc0 = false;
+      }
+      else {
+        palSetPad(GPIOB, GPIOB_PIN15);
+        led_pc0 = true;
+      }
     }
     else {
+      /* Frame not acknowledged: keep the LED solid ON as an error marker
+         and continue testing (the driver may recover on the next call).*/
       palSetPad(GPIOB, GPIOB_PIN15);
-      led = true;
+      led_pc0 = true;
+    }
+
+    /* SLED1 group frame on PB8: color = phase + 1 (GRB).*/
+    frame_pb8[0] = colors[(phase + 1U) % 3U][0];
+    frame_pb8[1] = colors[(phase + 1U) % 3U][1];
+    frame_pb8[2] = colors[(phase + 1U) % 3U][2];
+    if (sled_lld_send_bytes(SLED1, frame_pb8, sizeof(frame_pb8)) == MSG_OK) {
+      if (led_pb8) {
+        palClearPad(GPIOB, GPIOB_PIN14);
+        led_pb8 = false;
+      }
+      else {
+        palSetPad(GPIOB, GPIOB_PIN14);
+        led_pb8 = true;
+      }
+    }
+    else {
+      palSetPad(GPIOB, GPIOB_PIN14);
+      led_pb8 = true;
     }
 
     phase = (phase + 1U) % 3U;
-    chThdSleepMilliseconds(300);
+    chThdSleepMilliseconds(200);
   }
 }
