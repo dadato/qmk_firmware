@@ -6,9 +6,11 @@ MCU = SK32F077
 # The QMK application is linked at 0x08004000 by keyboards/sk32/kb17/ld/.
 BOOTLOADER = sk32duino
 
-# The SK32F077 has no flash-backed emulated EEPROM configured; use a
-# non-persistent transient EEPROM for now.
-EEPROM_DRIVER = transient
+# EEPROM persistence: wear-leveling driver backed by the SK32F077 internal
+# flash (native EFL / embedded_flash) in the last 2 KB page. The platform
+# (common_features.mk) routes MCU_SERIES == SK32F0xx to WEAR_LEVELING_DRIVER ==
+# embedded_flash and enables HAL_USE_EFL automatically.
+EEPROM_DRIVER = vendor
 
 BOOTMAGIC_ENABLE = yes    # Virtual DIP switch configuration
 MOUSEKEY_ENABLE = yes     # Mouse keys
@@ -23,3 +25,11 @@ RGBLIGHT_ENABLE = no
 RGB_MATRIX_ENABLE = yes
 RGB_MATRIX_DRIVER = ws2812
 WS2812_DRIVER = sled
+
+# VIA support (remap + config + lighting over the HID raw endpoint).  This
+# automatically pulls in RAW_ENABLE, DYNAMIC_KEYMAP_ENABLE, TRI_LAYER_ENABLE and
+# (redundantly) BOOTMAGIC_ENABLE.  Persistence goes through the wear-leveling
+# EEPROM already enabled above.  VIAL_INSECURE is only a dev convenience so the
+# "secure unlock" does not lock the board during bring-up.
+VIA_ENABLE = yes
+VIA_INSECURE = yes
