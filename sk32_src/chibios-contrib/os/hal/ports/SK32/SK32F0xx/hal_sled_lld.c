@@ -26,20 +26,29 @@
  *          and channel 2 for SLED2) that must be routed to the SLED request
  *          line through the SYSCFG CFGR3 remapping, exactly like the vendor
  *          SYSCFG_DMAChannelConfig() API does.
- * @note    The transfers are byte wide memory-to-peripheral operations that
- *          push a raw color byte stream into the group data register
- *          (SLED->DR[x]); each 8-bit write fills one FIFO entry and the
- *          block serializes the stream on the output pads.  This matches
- *          the vendor reference implementation (RGBKeyboardSTK) where a
- *          GRB/GRB/... buffer is streamed with the DMA channel configured
- *          for byte sized accesses, no CPU bit packing is involved.
+ * @note    The transfers are memory-to-peripheral operations that push a raw
+ *          color byte stream into the group data register (SLED->DR[x]);
+ *          the write width is selected by the caller and controls how the
+ *          hardware fills each 32 bits wide FIFO entry, which determines how
+ *          the four output channels of a group are driven:
+ *          - @p SLED_WIDTH_8BIT: every byte is replicated 4 times into the
+ *            FIFO entry, so all four channels carry the same byte stream (one
+ *            light effect, smallest RAM footprint);
+ *          - @p SLED_WIDTH_16BIT: every half word is replicated twice, so
+ *            CH0 == CH2 and CH1 == CH3 each carry their own stream (two
+ *            effects);
+ *          - @p SLED_WIDTH_32BIT: every word is stored directly, so each of
+ *            the four channels carries its own byte (four effects).
+ *          The byte-to-channel mapping is little endian (byte_i of a FIFO
+ *          entry is serialized on channel i).
  * @note    The transfer is synchronous: the function waits for the previous
  *          frame (including its reset pulse) to be completely shifted out,
- *          reloads the DMA channel, arms the reset code (CR RSTSTRx) and
- *          waits until the hardware reports the reset completed, so every
- *          call produces one complete, self contained WS2812 frame.  No
- *          SLED interrupt is used, the completion is detected by polling
- *          the DMA channel counter and the SLED reset flag.
+ *          reloads the DMA channel with the requested width, arms the reset
+ *          code (CR RSTSTRx) and waits until the hardware reports the reset
+ *          completed, so every call produces one complete, self contained
+ *          WS2812 frame.  No SLED interrupt is used, the completion is
+ *          detected by polling the DMA channel counter and the SLED reset
+ *          flag.
  *
  * @addtogroup SK32F0xx_SLED
  * @{
@@ -112,15 +121,31 @@
 #endif
 
 /**
- * @brief   CCR mode of the SLED DMA transfers: memory to peripheral, byte
- *          sized accesses, memory pointer increment, no peripheral
- *          increment.
+ * @brief   CCR mode of the SLED DMA transfers base (memory to peripheral,
+ *          memory pointer increment, no peripheral increment, priority).
+ * @note    The access width bits (PSIZE/MSIZE) are added per transfer from
+ *          the selected write width in @p sled_lld_send().
  */
 #define SK32_SLED_DMA_MODE               (SK32_DMA_CR_DIR_M2P    |          \
                                           SK32_DMA_CR_MINC        |          \
-                                          SK32_DMA_CR_PSIZE_BYTE  |          \
-                                          SK32_DMA_CR_MSIZE_BYTE |          \
                                           SK32_DMA_CR_PL(SK32_SLED_DMA_PRIORITY))
+
+/**
+ * @brief   Builds the CCR PSIZE/MSIZE access width bits for a SLED write
+ *          width.  The memory and peripheral access sizes are kept in sync
+ *          so that every DMA beat pushes one FIFO entry of the selected
+ *          width.
+ *
+ * @param[in] width     the SLED write width (@p sled_width_t)
+ * @return              The PSIZE | MSIZE bit pattern to OR into the CCR mode.
+ */
+#define SK32_SLED_DMA_SIZE_MODE(width)                                     \
+  ((width) == SLED_WIDTH_16BIT ? (SK32_DMA_CR_PSIZE_HWORD |                \
+                                  SK32_DMA_CR_MSIZE_HWORD) :               \
+   (width) == SLED_WIDTH_32BIT ? (SK32_DMA_CR_PSIZE_WORD  |                \
+                                  SK32_DMA_CR_MSIZE_WORD) :                \
+                                 (SK32_DMA_CR_PSIZE_BYTE |                 \
+                                  SK32_DMA_CR_MSIZE_BYTE))
 
 /*===========================================================================*/
 /* Driver exported variables.                                                */
@@ -340,36 +365,53 @@ void sled_lld_stop(void) {
  * @brief   Sends one complete frame on a SLED group.
  * @details The function is synchronous: it waits for any previous frame
  *          (data plus reset pulse) to be completely shifted out, reloads
- *          the DMA channel with the new byte stream, arms the trailing
- *          reset code and waits until the hardware reports that the whole
- *          frame has been transmitted, so every call produces one complete,
- *          self contained WS2812 frame.
- * @note    The bytes are sent verbatim (no bit packing): every byte of
- *          @p data is serialized as one WS2812 channel byte, so a GRB/GRB/
- *          ... buffer programs one LED per 3 bytes (or 4 bytes when a
- *          white channel is used).
+ *          the DMA channel with the new stream using the selected write
+ *          width, arms the trailing reset code and waits until the hardware
+ *          reports that the whole frame has been transmitted, so every call
+ *          produces one complete, self contained WS2812 frame.
+ * @note    The write width selects how the hardware fills each FIFO entry
+ *          and therefore which output channels are driven:
+ *          - @p SLED_WIDTH_8BIT:  every byte is replicated on all four
+ *            channels (same effect, GRB/GRB/... programs one LED per 3
+ *            bytes) and @p size is a byte count;
+ *          - @p SLED_WIDTH_16BIT: the low byte of each half word drives
+ *            CH0/CH2 and the high byte CH1/CH3, so @p data must hold
+ *            @p size/2 half words (GRB stream of two effects interleaved);
+ *          - @p SLED_WIDTH_32BIT: byte_i of each word drives CH_i, so
+ *            @p data must hold @p size/4 words (GRB streams of four effects
+ *            interleaved).
+ *          In every case the byte to channel mapping is little endian
+ *          (byte_i -> CH_i of the FIFO entry).
  * @note    The transfer size is limited to
- *          @p SK32_SLED_MAX_TRANSFER_BYTES bytes by the 16 bit DMA counter.
+ *          @p SK32_SLED_MAX_TRANSFER_BYTES bytes by the 16 bit DMA counter
+ *          and must be an integer number of the selected width.
  * @note    The buffer is not modified by the driver and only needs to stay
  *          valid until the function returns (the transfer is synchronous).
  *
  * @param[in] group     the SLED group identifier (@p SLED1 or @p SLED2)
+ * @param[in] width     the data register write width (@p sled_width_t)
  * @param[in] data      pointer to the byte stream to be transmitted
- * @param[in] size      number of bytes to be transmitted
+ * @param[in] size      number of bytes of @p data
  * @return              The operation result.
  * @retval MSG_OK       the frame has been transmitted.
- * @retval MSG_RESET    the driver or the group is not started.
+ * @retval MSG_RESET    the driver or the group is not started, or the size
+ *                      is not a multiple of the selected width.
  * @retval MSG_TIMEOUT  the SLED did not become ready in time.
  *
  * @api
  */
-msg_t sled_lld_send_bytes(sled_group_t group, const uint8_t *data,
-                          size_t size) {
+msg_t sled_lld_send(sled_group_t group, sled_width_t width,
+                    const uint8_t *data, size_t size) {
   const sk32_dma_stream_t *dmastp;
+  uint32_t                 mode;
   msg_t                    ret;
   int                      tmo;
+  size_t                   beats;
 
   osalDbgCheck(SK32_SLED_IS_VALID_GROUP(group));
+  osalDbgCheck((width == SLED_WIDTH_8BIT) ||
+               (width == SLED_WIDTH_16BIT) ||
+               (width == SLED_WIDTH_32BIT));
   osalDbgCheck((data != NULL) || (size == 0U));
 
   if (!sled_started) {
@@ -388,6 +430,13 @@ msg_t sled_lld_send_bytes(sled_group_t group, const uint8_t *data,
     return MSG_RESET;
   }
 
+  /* The byte stream must be an integer number of the selected data width
+     (1, 2 or 4 bytes per FIFO entry).*/
+  beats = size / (1U << ((unsigned)width));
+  if (beats * (1U << ((unsigned)width)) != size) {
+    return MSG_RESET;
+  }
+
   /* Waiting for the previous frame (data plus its trailing reset pulse) to
      be completed: the RSTSTRx bit is cleared by the hardware when the reset
      code has been emitted.  This is the same synchronization used by the
@@ -400,11 +449,12 @@ msg_t sled_lld_send_bytes(sled_group_t group, const uint8_t *data,
     return ret;
   }
 
-  /* DMA channel reload.*/
+  /* DMA channel reload with the access size matching the write width.*/
+  mode = SK32_SLED_DMA_MODE | SK32_SLED_DMA_SIZE_MODE(width);
   dmaStreamDisable(dmastp);
-  dmaStreamSetTransactionSize(dmastp, size);
+  dmaStreamSetTransactionSize(dmastp, beats);
   dmaStreamSetMemory0(dmastp, data);
-  dmaStreamSetMode(dmastp, SK32_SLED_DMA_MODE);
+  dmaStreamSetMode(dmastp, mode);
   dmaStreamEnable(dmastp);
 
   /* Arming the reset code that terminates the frame: the hardware starts
@@ -412,7 +462,7 @@ msg_t sled_lld_send_bytes(sled_group_t group, const uint8_t *data,
      drained (the same sequence used by the vendor demonstration code).*/
   SLED->CR |= sled_lld_rststr_mask(group);
 
-  /* Waiting for the DMA to push every byte into the SLED FIFO.*/
+  /* Waiting for the DMA to push every FIFO entry into the SLED FIFO.*/
   tmo = SK32_SLED_BUSY_TIMEOUT;
   while (dmaStreamGetTransactionSize(dmastp) != 0U) {
     if (tmo-- <= 0) {
@@ -434,6 +484,29 @@ msg_t sled_lld_send_bytes(sled_group_t group, const uint8_t *data,
   SLED->SR = (group == SLED1) ? SLED_SR_INT1 : SLED_SR_INT2;
 
   return MSG_OK;
+}
+
+/**
+ * @brief   Sends one complete frame on a SLED group using byte wide (8 bit)
+ *          writes.
+ * @details Equivalent to @p sled_lld_send(group, SLED_WIDTH_8BIT, data,
+ *          size): every byte is replicated on all four output channels of
+ *          the group, so the four channels carry the same light effect.
+ *
+ * @param[in] group     the SLED group identifier (@p SLED1 or @p SLED2)
+ * @param[in] data      pointer to the byte stream to be transmitted
+ * @param[in] size      number of bytes to be transmitted
+ * @return              The operation result.
+ * @retval MSG_OK       the frame has been transmitted.
+ * @retval MSG_RESET    the driver or the group is not started.
+ * @retval MSG_TIMEOUT  the SLED did not become ready in time.
+ *
+ * @api
+ */
+msg_t sled_lld_send_bytes(sled_group_t group, const uint8_t *data,
+                          size_t size) {
+
+  return sled_lld_send(group, SLED_WIDTH_8BIT, data, size);
 }
 
 #endif /* HAL_USE_SLED == TRUE */

@@ -26,8 +26,12 @@
 
 /*RGB MATRIX*/
 /* LED string is driven by the SK32F077 SLED peripheral (WS2812_DRIVER=sled).
- * The data pad is SLED1_CH0 = PC0 in alternate function 14 (see
+ * The data pad is SLED1_CH0 = PC0 in alternate function 14, served by the
+ * SLED2 channel registers (DR[1]/DMAEN2).  Enable the SLED2 group in the
+ * low level driver and select it for the ws2812 driver (see
  * platforms/chibios/drivers/ws2812_sled.c). */
+#define WS2812_SLED_GROUP SLED2
+#define SK32_SLED_USE_SLED2 TRUE
 #define WS2812_SLED_PORT GPIOC
 #define WS2812_SLED_PIN 0U
 #define RGB_MATRIX_LED_COUNT 17

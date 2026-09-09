@@ -163,6 +163,31 @@ typedef enum {
 } sled_group_t;
 
 /**
+ * @brief   Type of a SLED data register write width.
+ * @details The write width selects how the hardware fills the 32 bits wide
+ *          FIFO entry when data is written to the group data register, which
+ *          determines how the four output channels of a group are driven:
+ *          - @p SLED_WIDTH_8BIT:  one byte is replicated 4 times into the
+ *            FIFO entry, so all four channels carry the same data stream
+ *            (the same light effect on CH0..CH3) using the least amount of
+ *            RAM;
+ *          - @p SLED_WIDTH_16BIT: a half word is replicated twice into the
+ *            FIFO entry, so CH0 == CH2 carry one stream and CH1 == CH3 the
+ *            other (two simultaneous effects);
+ *          - @p SLED_WIDTH_32BIT: a whole word is stored directly into the
+ *            FIFO entry, so each of the four channels carries its own byte
+ *            (four simultaneous effects).
+ * @note    The byte to channel mapping is little endian: byte_i of a FIFO
+ *          entry is serialized on channel i (CH0 is the least significant
+ *          byte).
+ */
+typedef enum {
+  SLED_WIDTH_8BIT  = 0,                 /**< @brief 8 bit writes (1 byte). */
+  SLED_WIDTH_16BIT = 1,                 /**< @brief 16 bit writes (2 bytes).*/
+  SLED_WIDTH_32BIT = 2                  /**< @brief 32 bit writes (4 bytes).*/
+} sled_width_t;
+
+/**
  * @brief   SLED configuration structure.
  * @note    The time-code and divider values are expressed in SLED clock
  *          cycles, the meaning of each field matches the vendor
@@ -270,6 +295,8 @@ extern "C" {
   void sled_lld_init(void);
   void sled_lld_start(const SLEDConfig *config);
   void sled_lld_stop(void);
+  msg_t sled_lld_send(sled_group_t group, sled_width_t width,
+                      const uint8_t *data, size_t size);
   msg_t sled_lld_send_bytes(sled_group_t group, const uint8_t *data,
                             size_t size);
 #ifdef __cplusplus
