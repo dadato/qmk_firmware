@@ -149,12 +149,13 @@
  * streams and the EV/ER IRQ split do not apply).  The I2C1 input clock is
  * fixed: the CFGR3 register has no I2C1SW bits and the clock is analyzed as
  * the 8MHz HSI for the CCR/FREQ computation (to be validated on hardware).
- * I2C1 is wired to PB6 (SCL) and PB7 (SDA), alternate function 1.
+ * I2C1 is wired to PB6 (SCL) and PB7 (SDA), alternate function 13 (open
+ * drain, external pull-ups) as validated by the SK32 IIC testhal.
  * SK32_I2C_USE_I2C1 defaults to FALSE: the native driver (hal_i2c_lld.c)
  * is only pulled into the build when HAL_USE_I2C is TRUE in halconf.h, in
  * which case this switch must also be set to TRUE.
  */
-#define SK32_I2C_USE_I2C1                   FALSE
+#define SK32_I2C_USE_I2C1                   TRUE
 #define SK32_I2C_I2C1_PRIORITY              3
 #define SK32_I2C_BUSY_TIMEOUT               50
 
