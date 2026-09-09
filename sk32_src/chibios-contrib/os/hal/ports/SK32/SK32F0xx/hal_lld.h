@@ -275,10 +275,12 @@
  * The SK32 DMA helper code (sk32_dma.c) and the DMA1 initialization in
  * hal_lld.c are self-gated on SK32_DMA_REQUIRED: any low level driver of
  * this platform that allocates DMA1 channels must cause the macro to be
- * defined.  The SLED driver (hal_sled_lld.c) is currently the only native
- * DMA user, so the macro is tied to the HAL_USE_SLED switch.
+ * defined.  The SLED (hal_sled_lld.c) and KBCU (hal_kbcu_lld.c) drivers are
+ * the native DMA users, so the macro is tied to the HAL_USE_SLED and
+ * HAL_USE_KBCU switches.
  */
-#if defined(HAL_USE_SLED) && (HAL_USE_SLED == TRUE)
+#if (defined(HAL_USE_SLED) && (HAL_USE_SLED == TRUE)) ||                     \
+    (defined(HAL_USE_KBCU) && (HAL_USE_KBCU == TRUE))
 #define SK32_DMA_REQUIRED
 #endif
 

@@ -57,13 +57,24 @@
 /*
  * SERIAL driver system settings.
  * The SK32 native serial driver (SR/DR USART) is selected through the
- * SK32_SERIAL_USE_USARTx switches, USART2 is mapped on PA2/PA3 (alternate 1)
- * as documented in board.h.
+ * SK32_SERIAL_USE_USARTx switches.  Not used by this test: HAL_USE_SERIAL
+ * is disabled in halconf.h, the switches are kept at FALSE.
  */
 #define SK32_SERIAL_USE_USART1              FALSE
-#define SK32_SERIAL_USE_USART2              TRUE
+#define SK32_SERIAL_USE_USART2              FALSE
 #define SK32_SERIAL_USART1_PRIORITY         3
 #define SK32_SERIAL_USART2_PRIORITY         3
+
+/*
+ * SPI driver system settings.
+ * The SK32 native interrupt-driven SPI driver is selected through the
+ * SK32_SPI_USE_SPIx switches.  Not used by this test: HAL_USE_SPI is
+ * disabled in halconf.h, the switches are kept at FALSE.
+ */
+#define SK32_SPI_USE_SPI1                   FALSE
+#define SK32_SPI_USE_SPI2                   FALSE
+#define SK32_SPI_SPI1_PRIORITY              3
+#define SK32_SPI_SPI2_PRIORITY              3
 
 /*
  * SK32 ST driver system settings.

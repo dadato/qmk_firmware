@@ -72,8 +72,8 @@ static inline void stm32_flash_lock(EFlashDriver *eflp) {
 
 static inline void stm32_flash_unlock(EFlashDriver *eflp) {
 
-  eflp->flash->KEYR |= FLASH_KEY1;
-  eflp->flash->KEYR |= FLASH_KEY2;
+  eflp->flash->KEYR |= FLASH_FKEY1;
+  eflp->flash->KEYR |= FLASH_FKEY2;
 }
 
 static inline void stm32_flash_enable_pgm(EFlashDriver *eflp) {

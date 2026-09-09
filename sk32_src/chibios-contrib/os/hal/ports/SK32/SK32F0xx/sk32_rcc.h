@@ -955,6 +955,42 @@
 /** @} */
 
 /**
+ * @name    KBCU peripheral specific RCC operations
+ * @{
+ */
+/**
+ * @brief   Enables the KBCU peripheral clock.
+ * @note    The KBCU (Keyboard Control Unit) is a 3Think peripheral on the
+ *          APB1 bus, present on both the SK32F072 and SK32F077 variants.
+ *          The @p lp parameter is ignored in this family.
+ *
+ * @param[in] lp        low power enable flag
+ *
+ * @api
+ */
+#define rccEnableKBCU(lp) rccEnableAPB1(RCC_APB1ENR_KBCUEN, lp)
+
+/**
+ * @brief   Disables the KBCU peripheral clock.
+ *
+ * @api
+ */
+#define rccDisableKBCU() rccDisableAPB1(RCC_APB1ENR_KBCUEN)
+
+/**
+ * @brief   Resets the KBCU peripheral.
+ * @note    The SK32 CMSIS header defines RCC_APB1RSTR_KBCURST with the same
+ *          value as the (bit-identical) enable bit, kept for clarity.
+ *
+ * @api
+ */
+#if !defined(RCC_APB1RSTR_KBCURST)
+#define RCC_APB1RSTR_KBCURST                 RCC_APB1ENR_KBCUEN
+#endif
+#define rccResetKBCU() rccResetAPB1(RCC_APB1RSTR_KBCURST)
+/** @} */
+
+/**
  * @name    WWDG peripherals specific RCC operations
  * @{
  */

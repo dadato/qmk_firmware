@@ -224,6 +224,28 @@
  */
 #define SK32_FLASH_WAIT_STATES          2
 
+/**
+ * @name    Embedded Flash geometry.
+ * @details The SK32F077 internal flash is single-bank, 128 KByte, organised in
+ *          2 KByte pages (unlike the STM32F072 1 KByte pages).  The write line
+ *          is a half-word (2 bytes) exactly like the STM32F0 family.  These
+ *          macros are consumed by the EFL low level driver (hal_efl_lld.c)
+ *          which derives its sector/count/size and the programming alignment
+ *          from them; they must not be redefined elsewhere.
+ * @{
+ */
+#if !defined(STM32_FLASH_LINE_SIZE)
+#define STM32_FLASH_LINE_SIZE           2
+#endif
+#if !defined(STM32_FLASH_SECTOR_SIZE)
+#define STM32_FLASH_SECTOR_SIZE         2048U
+#endif
+#if !defined(STM32_FLASH_NUMBER_OF_BANKS)
+#define STM32_FLASH_NUMBER_OF_BANKS     1
+#endif
+#if !defined(STM32_FLASH_SECTORS_PER_BANK)
+#define STM32_FLASH_SECTORS_PER_BANK    64U
+#endif
 /** @} */
 
 #endif /* SK32_REGISTRY_H */
