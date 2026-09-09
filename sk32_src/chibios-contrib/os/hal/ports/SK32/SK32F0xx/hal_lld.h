@@ -269,6 +269,19 @@
  */
 #define SK32_USBCLK                         SK32_PLL48CLK
 
+/*
+ * DMA services activation.
+ *
+ * The SK32 DMA helper code (sk32_dma.c) and the DMA1 initialization in
+ * hal_lld.c are self-gated on SK32_DMA_REQUIRED: any low level driver of
+ * this platform that allocates DMA1 channels must cause the macro to be
+ * defined.  The SLED driver (hal_sled_lld.c) is currently the only native
+ * DMA user, so the macro is tied to the HAL_USE_SLED switch.
+ */
+#if defined(HAL_USE_SLED) && (HAL_USE_SLED == TRUE)
+#define SK32_DMA_REQUIRED
+#endif
+
 /*===========================================================================*/
 /* Driver data structures and types.                                         */
 /*===========================================================================*/

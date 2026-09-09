@@ -101,6 +101,17 @@ ifeq ($(strip $(BOOTLOADER)), stm32duino)
     DFU_ARGS = -d 1EAF:0003 -a 2 -R
     DFU_SUFFIX_ARGS = -v 1EAF -p 0003
 endif
+ifeq ($(strip $(BOOTLOADER)), sk32duino)
+    OPT_DEFS += -DBOOTLOADER_SK32DUINO
+    BOOTLOADER_TYPE = sk32duino
+
+    # Options to pass to dfu-util when flashing.
+    # The sk32duino bootloader speaks the STM32duino/LeafLabs DFU flavour
+    # (VID:PID 1EAF:0003, download target alternate setting 2 = the QMK
+    # application at 0x08004000).
+    DFU_ARGS = -d 1EAF:0003 -a 2 -R
+    DFU_SUFFIX_ARGS = -v 1EAF -p 0003
+endif
 ifeq ($(strip $(BOOTLOADER)), tinyuf2)
     OPT_DEFS += -DBOOTLOADER_TINYUF2
     BOOTLOADER_TYPE = tinyuf2

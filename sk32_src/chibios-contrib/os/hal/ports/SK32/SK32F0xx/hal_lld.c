@@ -70,10 +70,17 @@ uint32_t SystemCoreClock = SK32_HCLK;
 void hal_lld_init(void) {
 
   /* Reset of all the peripherals. GPIOs are not reset because the board
-     early initialization code may have already configured them.*/
+     early initialization code may have already configured them. SYSCFG
+     is not reset either: Cortex-M0 has no VTOR, so when the application
+     is launched behind the sk32duino bootloader its exception vectors are
+     fetched from the SRAM copy selected by SYSCFG CFGR1 MEM_MODE = 0b11.
+     Resetting SYSCFG here would silently clear that remap and the first
+     interrupt (the SysTick started by chSysInit()) would vector into the
+     bootloader handlers again. The device header spells this bit
+     RCC_APB2ENR_SYSCFGRST although it lives in the APB2RSTR register.*/
   RCC->AHBRSTR = (uint32_t)~SK32_GPIO_CLK_MASK;
   RCC->AHBRSTR = (uint32_t)0;
-  RCC->APB2RSTR = (uint32_t)0xFFFFFFFF;
+  RCC->APB2RSTR = (uint32_t)~RCC_APB2ENR_SYSCFGRST;
   RCC->APB2RSTR = (uint32_t)0;
   RCC->APB1RSTR = (uint32_t)0xFFFFFFFF;
   RCC->APB1RSTR = (uint32_t)0;

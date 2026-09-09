@@ -93,6 +93,9 @@ BOOTLOADER_VIDS_PIDS = {
         ("1eaf", "0003"),  # STM32duino
         ("0483", "df11")  # STM32 DFU
     },
+    'sk32duino': {
+        ("1eaf", "0003"),  # SK32F077 custom DFU bootloader (16 KB @ 0x08000000)
+    },
     'apm32-dfu': {("314b", "0106")},
     'gd32v-dfu': {("28e9", "0189")},
     'wb32-dfu': {("342d", "dfa0")},

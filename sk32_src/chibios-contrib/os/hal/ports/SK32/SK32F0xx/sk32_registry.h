@@ -84,6 +84,8 @@
 #define SK32_HAS_ADC1           TRUE
 #define SK32_HAS_DMA1           TRUE
 #define SK32_HAS_USB            TRUE
+#define SK32_HAS_TIM16          TRUE
+#define SK32_HAS_TIM17          TRUE
 
 #if defined(SK32F077xB)
 #define SK32_HAS_SPI2           FALSE

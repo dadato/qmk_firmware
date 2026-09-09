@@ -1,23 +1,21 @@
 #pragma once
-/*qmk compile -kb w17_pad/w17 -km default*/
-/*qmk compile -kb w17_pad/w17 -km vial*/
-
-#include "config_common.h"
-
+/*qmk compile -kb sk32/kb17 -km default*/
 
 /* key matrix size */
 #define MATRIX_ROWS 5
 #define MATRIX_COLS 4
 
-/* key matrix pins */
-#define MATRIX_COL_PINS { A6, A5, A7, B15}
-#define MATRIX_ROW_PINS { B14, B12, A8, A4, A3}
+/* key matrix pins
+ * ROW1-5: PB2 / PB1 / PB0 / PC5 / PC4
+ * COL1-4: PB12 / PB11 / PB10 / PB13
+ * Other key pads (informational):
+ *   PA11 = USB_DM, PA12 = USB_DP, PA13 = SWDIO, PA14 = SWCLK
+ */
+#define MATRIX_COL_PINS { B12, B11, B10, B13 }
+#define MATRIX_ROW_PINS { B2, B1, B0, C5, C4 }
 
 /* COL2ROW or ROW2COL */
 #define DIODE_DIRECTION ROW2COL
-
-/*NKRO*/
-#define FORCE_NKRO
 
 /* Set 0 if debouncing isn't needed */
 #define DEBOUNCE 5
@@ -27,34 +25,21 @@
 #define BOOTMAGIC_LITE_COLUMN 0
 
 /*RGB MATRIX*/
-
-// RGB pin
-#define RGB_DI_PIN B13
-// RGB number
+/* LED string is driven by the SK32F077 SLED peripheral (WS2812_DRIVER=sled).
+ * The data pad is SLED1_CH0 = PC0 in alternate function 14 (see
+ * platforms/chibios/drivers/ws2812_sled.c). */
+#define WS2812_SLED_PORT GPIOC
+#define WS2812_SLED_PIN 0U
 #define RGB_MATRIX_LED_COUNT 17
-#define DRIVER_LED_TOTAL 17
-#define RGBLED_NUM 17
-
-
-#define WS2812_PWM_DRIVER PWMD1  // default: PWMD2
-#define WS2812_PWM_CHANNEL 1  // default: 2
-#define WS2812_PWM_PAL_MODE 2  // Pin "alternate function", see the respective datasheet for the appropriate values for your MCU. default: 2
-#define WS2812_PWM_COMPLEMENTARY_OUTPUT // Define for a complementary timer output (TIMx_CHyN); omit for a normal timer output (TIMx_CHy).
-#define WS2812_DMA_STREAM STM32_DMA1_STREAM5  // DMA Stream for TIMx_UP, see the respective reference manual for the appropriate values for your MCU.
-#define WS2812_DMA_CHANNEL 5  // DMA Channel for TIMx_UP, see the respective reference manual for the appropriate values for your MCU.
-//#define WS2812_DMAMUX_ID STM32_DMAMUX1_TIM1_UP // DMAMUX configuration for TIMx_UP -- only required if your MCU has a DMAMUX peripheral, see the respective reference manual for the appropriate values for your MCU.
-
-
-
 
 #define RGB_MATRIX_TIMEOUT 0 // number of milliseconds to wait until rgb automatically turns off
-#define RGB_DISABLE_WHEN_USB_SUSPENDED // turn off effects when suspended
+#define RGB_MATRIX_SLEEP // turn off effects when suspended
 //#define RGB_MATRIX_LED_PROCESS_LIMIT (RGB_MATRIX_LED_COUNT + 4) / 5 // limits the number of LEDs to process in an animation per task run (increases keyboard responsiveness)
 //#define RGB_MATRIX_LED_FLUSH_LIMIT 16 // limits in milliseconds how frequently an animation will update the LEDs. 16 (16ms) is equivalent to limiting to 60fps (increases keyboard responsiveness)
 #define RGB_MATRIX_MAXIMUM_BRIGHTNESS 180 // limits maximum brightness of LEDs to 180 out of 255. If not defined maximum brightness is set to 255
 #define RGB_MATRIX_DEFAULT_HUE 0 // Sets the default hue value, if none has been set
 #define RGB_MATRIX_DEFAULT_SAT 255 // Sets the default saturation value, if none has been set
-#define RGB_MATRIX_DEFAULT_VAL RGB_MATRIX_MAXIMUM_BRIGHTNESS // Sets the default brightness value, if none has been set
+#define RGB_MATRIX_DEFAULT_VAL 180 // Sets the default brightness value, if none has been set
 #define RGB_MATRIX_DEFAULT_SPD 127 // Sets the default animation speed, if none has been set
 //#define RGB_MATRIX_DISABLE_KEYCODES // disables control of rgb matrix by keycodes (must use code functions to control the feature)
 //#define RGB_TRIGGER_ON_KEYDOWN      // Triggers RGB keypress events on key down. This makes RGB control feel more responsive. This may cause RGB to not function properly on some boards

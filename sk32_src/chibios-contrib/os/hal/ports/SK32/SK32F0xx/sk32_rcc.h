@@ -193,9 +193,14 @@
 
 /**
  * @brief   Resets the ADC1 peripheral.
+ * @note    The SK32 CMSIS header does not define RCC_APB2RSTR_ADC1RST, the
+ *          reset bit is aliased to the (bit-identical) enable bit value.
  *
  * @api
  */
+#if !defined(RCC_APB2RSTR_ADC1RST)
+#define RCC_APB2RSTR_ADC1RST                 RCC_APB2ENR_ADC1RST
+#endif
 #define rccResetADC1() rccResetAPB2(RCC_APB2RSTR_ADC1RST)
 /** @} */
 
@@ -298,14 +303,14 @@
  *
  * @api
  */
-#define rccEnableDMA1(lp) rccEnableAHB(RCC_AHBENR_DMA1EN, lp)
+#define rccEnableDMA1(lp) rccEnableAHB(RCC_AHBENR_DMAEN, lp)
 
 /**
  * @brief   Disables the DMA1 peripheral clock.
  *
  * @api
  */
-#define rccDisableDMA1() rccDisableAHB(RCC_AHBENR_DMA1EN)
+#define rccDisableDMA1() rccDisableAHB(RCC_AHBENR_DMAEN)
 
 /**
  * @brief   Resets the DMA1 peripheral.
@@ -523,9 +528,14 @@
 
 /**
  * @brief   Resets the TIM3 peripheral.
+ * @note    The SK32 CMSIS header does not define RCC_APB1RSTR_TIM3RST, the
+ *          reset bit is aliased to the (bit-identical) enable bit value.
  *
  * @api
  */
+#if !defined(RCC_APB1RSTR_TIM3RST)
+#define RCC_APB1RSTR_TIM3RST                 RCC_APB1ENR_TIM3RST
+#endif
 #define rccResetTIM3() rccResetAPB1(RCC_APB1RSTR_TIM3RST)
 
 /**
@@ -643,9 +653,14 @@
 
 /**
  * @brief   Resets the TIM16 peripheral.
+ * @note    The SK32 CMSIS header does not define RCC_APB2RSTR_TIM16RST, the
+ *          reset bit is aliased to the (bit-identical) enable bit value.
  *
  * @api
  */
+#if !defined(RCC_APB2RSTR_TIM16RST)
+#define RCC_APB2RSTR_TIM16RST                RCC_APB2ENR_TIM16RST
+#endif
 #define rccResetTIM16() rccResetAPB2(RCC_APB2RSTR_TIM16RST)
 
 /**
@@ -667,9 +682,14 @@
 
 /**
  * @brief   Resets the TIM17 peripheral.
+ * @note    The SK32 CMSIS header does not define RCC_APB2RSTR_TIM17RST, the
+ *          reset bit is aliased to the (bit-identical) enable bit value.
  *
  * @api
  */
+#if !defined(RCC_APB2RSTR_TIM17RST)
+#define RCC_APB2RSTR_TIM17RST                RCC_APB2ENR_TIM17RST
+#endif
 #define rccResetTIM17() rccResetAPB2(RCC_APB2RSTR_TIM17RST)
 /** @} */
 

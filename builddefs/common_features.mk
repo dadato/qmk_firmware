@@ -975,7 +975,7 @@ ifeq ($(strip $(BATTERY_DRIVER_REQUIRED)), yes)
     endif
 endif
 
-VALID_WS2812_DRIVER_TYPES := bitbang custom i2c pwm spi vendor
+VALID_WS2812_DRIVER_TYPES := bitbang custom i2c pwm sled spi vendor
 
 WS2812_DRIVER ?= bitbang
 ifeq ($(strip $(WS2812_DRIVER_REQUIRED)), yes)
@@ -992,6 +992,12 @@ ifeq ($(strip $(WS2812_DRIVER_REQUIRED)), yes)
     ifeq ($(strip $(PLATFORM)), CHIBIOS)
         ifeq ($(strip $(WS2812_DRIVER)), pwm)
             OPT_DEFS += -DSTM32_DMA_REQUIRED=TRUE
+        endif
+        ifeq ($(strip $(WS2812_DRIVER)), sled)
+            # SK32 serial LED (SLED) driver: enables the native SK32F0xx
+            # SLED low level driver and, through the platform header
+            # (hal_lld.h), the SK32 DMA helper code as well.
+            OPT_DEFS += -DHAL_USE_SLED=TRUE
         endif
     endif
 
