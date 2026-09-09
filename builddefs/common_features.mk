@@ -219,14 +219,16 @@ ifneq ($(strip $(EEPROM_DRIVER)),none)
       ifeq ($(PLATFORM),AVR)
         # Automatically provided by avr-libc, nothing required
       else ifeq ($(PLATFORM),CHIBIOS)
-        ifneq ($(filter %_STM32F072xB %_STM32F042x6 %_SK32F077xB, $(MCU_SERIES)_$(MCU_LDSCRIPT)),)
+        ifneq ($(filter %_STM32F072xB %_STM32F042x6, $(MCU_SERIES)_$(MCU_LDSCRIPT)),)
           # STM32 Emulated EEPROM, backed by MCU flash (soon to be deprecated)
           OPT_DEFS += -DEEPROM_DRIVER -DEEPROM_LEGACY_EMULATED_FLASH
           COMMON_VPATH += $(PLATFORM_PATH)/$(PLATFORM_KEY)/$(DRIVER_DIR)/flash
           COMMON_VPATH += $(DRIVER_PATH)/flash
           SRC += eeprom_driver.c eeprom_legacy_emulated_flash.c legacy_flash_ops.c
-        else ifneq ($(filter $(MCU_SERIES),STM32F1xx STM32F3xx STM32F4xx STM32L4xx STM32G0xx STM32G4xx WB32F3G71xx WB32FQ95xx AT32F415 GD32VF103),)
-          # Wear-leveling EEPROM implementation, backed by MCU flash
+        else ifneq ($(filter $(MCU_SERIES),SK32F0xx STM32F1xx STM32F3xx STM32F4xx STM32L4xx STM32G0xx STM32G4xx WB32F3G71xx WB32FQ95xx AT32F415 GD32VF103),)
+          # Wear-leveling EEPROM implementation, backed by MCU flash.
+          # The SK32F0xx series uses the native EFL (embedded flash) driver in
+          # chibios-contrib together with the generic wear_leveling_efl.c.
           OPT_DEFS += -DEEPROM_DRIVER -DEEPROM_WEAR_LEVELING
           SRC += eeprom_driver.c eeprom_wear_leveling.c
           WEAR_LEVELING_DRIVER ?= embedded_flash

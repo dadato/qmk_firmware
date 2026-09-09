@@ -27,7 +27,10 @@ static volatile bool  ecc_error_occurred = false;
 
 // "Automatic" detection of the flash size -- ideally ChibiOS would have this already, but alas, it doesn't.
 static inline uint32_t detect_flash_size(void) {
-#if defined(WEAR_LEVELING_EFL_FLASH_SIZE)
+#if defined(SK32F077xB)
+    // 3Think SK32F077 exposes 128 KByte of internal flash, single bank.
+    return 0x20000U;
+#elif defined(WEAR_LEVELING_EFL_FLASH_SIZE)
     return WEAR_LEVELING_EFL_FLASH_SIZE;
 #elif defined(FLASH_BANK_SIZE)
     return FLASH_BANK_SIZE;
