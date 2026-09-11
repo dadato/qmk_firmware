@@ -10,8 +10,11 @@
  * the order above.
  */
 
-/* Set 0 if debouncing isn't needed */
-#define DEBOUNCE 5
+/* Per-key eager debounce: KEY1..KEY7 are one-GPIO-per-key (DIRECT_PINS), so a
+ * press is reported immediately and only the re-trigger guard uses the delay.
+ * sym_eager_pk gives the shortest press latency for this wiring. */
+#define DEBOUNCE_TYPE sym_eager_pk
+#define DEBOUNCE 1
 
 /*BOOTMAGIC KEY (KEY1)*/
 #define BOOTMAGIC_LITE_ROW 0
