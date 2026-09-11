@@ -1,0 +1,8 @@
+# Compiled firmware that is staged here for flashing must not be committed.
+# Real builds go to .build/ and are ignored by the repository root .gitignore.
+*.bin
+*.hex
+*.build.log
+
+# Whitelist this keyboard's VIA definition despite the root rule "via*.json".
+!via.json

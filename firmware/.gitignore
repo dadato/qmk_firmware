@@ -1,0 +1,4 @@
+# Re-include the firmware binaries here even though the repository root
+# ignores *.bin: these files are the ready-to-flash releases users grab
+# from a clone without compiling.
+!*.bin

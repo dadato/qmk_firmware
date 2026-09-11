@@ -1,0 +1,43 @@
+{
+    //Hardware Configuration
+    "keyboard_name": "LD7_OLED",
+    "manufacturer": "NUTWANG",
+    "url": "https://oshwhub.com/morempty",
+    "maintainer": "NUTWANG",
+    "processor": "SK32F077",
+    "bootloader": "sk32duino",
+    "usb": {
+        "vid": "0x0194",
+        "pid": "0x0464",
+        "device_version": "0.0.1"
+    },
+    "host": {
+        "default": {
+            "nkro": true
+        }
+    },
+    //7 directly wired keys (one GPIO per key, no matrix):
+    //  KEY1..KEY7 = PB12 PB11 PB10 PB2 PB1 PB0 PC5
+    "matrix_size": {
+        "cols": 7,
+        "rows": 1
+    },
+    "matrix_pins": {
+        "direct": [
+            ["B12", "B11", "B10", "B2", "B1", "B0", "C5"]
+        ]
+    },
+    "layouts": {
+        "LAYOUT_ld7": {
+            "layout": [
+                {"label": "Z (KEY1)", "x": 0, "y": 0, "matrix": [0, 0]},
+                {"label": "X (KEY2)", "x": 1, "y": 0, "matrix": [0, 1]},
+                {"label": "C (KEY3)", "x": 2, "y": 0, "matrix": [0, 2]},
+                {"label": "V (KEY4)", "x": 3, "y": 0, "matrix": [0, 3]},
+                {"label": "A (KEY5)", "x": 4, "y": 0, "matrix": [0, 4]},
+                {"label": "Ctrl (KEY6)", "x": 5, "y": 0, "matrix": [0, 5]},
+                {"label": "Enter (KEY7)", "x": 6, "y": 0, "matrix": [0, 6]}
+            ]
+        }
+    }
+}
