@@ -4,8 +4,9 @@
 
 ## 固件列表
 
-| 文件 | 对应键盘 | VID:PID | 说明 |
+| 文件 | 对应设备 | VID:PID / 地址 | 说明 |
 |---|---|---|---|
+| `sk32duino_boot.bin` | SK32 引导（bootloader） | 0x08000000（16KB） | sk32duino DFU 引导，两块键盘共用，烧一次即可 |
 | `sk32_kb17_default.bin` | KB17（W17PAD） | `0x0194:0x0463` | 17 键数字小键盘，VIA 支持 |
 | `sk32_ld7_oled_default.bin` | LD7_OLED | `0x0194:0x0464` | 7 键，OLED 统计显示 + 7 灯 RGB，VIA 支持 |
 
@@ -50,6 +51,22 @@ dfu-util -a 2 -D sk32_ld7_oled_default.bin      # LD7_OLED
 - `-a 2`：sk32duino 的 **App 介质是 DFU 备用接口 2**，必须指定；
 - 先进入 DFU（出现 `1EAF:0003`）再执行命令；
 - 刷写成功后板子自动复位并重新枚举为 HID 键盘。
+
+## 烧录 Bootloader（sk32duino_boot.bin）
+
+正常使用**不需要**每次烧 bootloader，只在第一次烧新板子或更换/升级引导时需要。
+
+- 目标地址：**0x08000000**，大小 16KB（App 在 0x08004000，不要覆盖）；
+- 进入方式**不是** DFU 按键（bootloader 还没烧时无法自身进 DFU），需要用 **ST-Link / SWD** 写入；
+- 例如（openocd + ST-Link，`sk32duino_boot.bin` 需先转为可烧格式）：
+  ```
+  openocd -f sk32_openocd_prog_boot.cfg
+  ```
+  或手动 st-flash：
+  ```
+  st-flash write sk32duino_boot.bin 0x08000000
+  ```
+- 确认 boot 在位且 App 完好后，上电即能正常进入 DFU / 启动 App。
 
 ## 方法三：一键脚本（Windows，需本机 QMK MSYS 环境）
 
