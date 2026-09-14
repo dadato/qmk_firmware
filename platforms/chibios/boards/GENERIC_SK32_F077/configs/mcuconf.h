@@ -209,9 +209,12 @@
 /*
  * SPI driver system settings.
  * The SK32 SPI is a legacy CR1/CR2/SR/DR unit (SPIv1 class) served by the
- * native interrupt-driven SK32 driver selected through the SK32_SPI_USE_SPIx
- * switches; the shared STM32 SPIv2 LLD is not part of this platform.  The
- * SPI2 unit is not present on the SK32F077 variant and is not configured.
+ * native SK32 driver selected through the SK32_SPI_USE_SPIx switches; the
+ * shared STM32 SPIv2 LLD is not part of this platform.  The driver is
+ * interrupt-driven by default, SPI1 can optionally be switched to its DMA1
+ * based transfer engine with SK32_SPI_USE_DMA (SPI2 has no DMA request
+ * lines).  The SPI2 unit is not present on the SK32F077 variant and is not
+ * configured.
  */
 #define SK32_SPI_USE_SPI1                   FALSE
 #define SK32_SPI_USE_SPI2                   FALSE
@@ -272,8 +275,29 @@
 #define STM32_USB_USB1_LP_IRQ_PRIORITY      3
 
 /*
- * WDG driver system settings.
+ * RTC driver system settings.
+ * The SK32 RTC is part of the backup domain and is served by the native
+ * SK32 driver; the shared STM32 RTCv2 LLD is not used (it requires the
+ * STM32 registry macros and the EXTI driver for its interrupt routing).
+ * SK32_RTC_USE_LSE selects the 32768Hz LSE crystal as clock source, when
+ * FALSE the internal LSI oscillator is used; the matching PRER prescalers
+ * are derived in hal_rtc_lld.h.  The STM32_RTCSEL setting above belongs to
+ * the (unused) shared STM32 driver.
  */
+#define SK32_RTC_USE_LSE                    FALSE
+#define SK32_RTC_IRQ_PRIORITY               3
+
+/*
+ * WDG driver system settings.
+ * The SK32 port provides a native driver for both watchdog controllers:
+ * the IWDG (WDGD1, clocked by the LSI oscillator, no interrupt) and the
+ * WWDG (WDGD2, clocked by PCLK1).  The shared STM32 xWDGv1 LLD is not used
+ * (IWDG only, STM32 registry based).  Both switches default to FALSE, set
+ * them to TRUE (together with HAL_USE_WDG in halconf.h) to enable the
+ * corresponding driver.
+ */
+#define SK32_WDG_USE_IWDG                   FALSE
+#define SK32_WDG_USE_WWDG                   FALSE
 #define STM32_WDG_USE_IWDG                  FALSE
 
 #endif /* MCUCONF_H */

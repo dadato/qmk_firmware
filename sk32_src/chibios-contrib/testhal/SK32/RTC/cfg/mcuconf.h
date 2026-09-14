@@ -55,38 +55,16 @@
 #define SK32_PPRE                          SK32_PPRE_DIV1
 
 /*
- * SERIAL driver system settings.
- * The SK32 native serial driver (SR/DR USART) is selected through the
- * SK32_SERIAL_USE_USARTx switches.  Not used by this test: HAL_USE_SERIAL
- * is disabled in halconf.h, the switches are kept at FALSE.
+ * RTC driver system settings.
+ * The SK32 RTC is a calendar unit of the backup domain served by the native
+ * SK32 driver.  This test uses the internal LSI oscillator as clock source
+ * (SK32_RTC_USE_LSE FALSE), the matching PRER prescalers are derived in
+ * hal_rtc_lld.h (125 / 320 for the ~40kHz LSI) so that the calendar runs at
+ * 1Hz.  Set SK32_RTC_USE_LSE to TRUE to use a 32768Hz LSE crystal instead,
+ * the prescalers become 32 / 1024 automatically.
  */
-#define SK32_SERIAL_USE_USART1              FALSE
-#define SK32_SERIAL_USE_USART2              FALSE
-#define SK32_SERIAL_USART1_PRIORITY         3
-#define SK32_SERIAL_USART2_PRIORITY         3
-
-/*
- * SPI driver system settings.
- * The SK32 native interrupt-driven SPI driver is selected through the
- * SK32_SPI_USE_SPIx switches.  Not used by this test: HAL_USE_SPI is
- * disabled in halconf.h, the switches are kept at FALSE.
- */
-#define SK32_SPI_USE_SPI1                   FALSE
-#define SK32_SPI_USE_SPI2                   FALSE
-#define SK32_SPI_SPI1_PRIORITY              3
-#define SK32_SPI_SPI2_PRIORITY              3
-
-/*
- * SLED driver system settings.
- * The SK32 SLED driver (hal_sled_lld.c) is enabled through the HAL_USE_SLED
- * switch in halconf.h.  It allocates one DMA1 channel per compiled group
- * (channel 1 for the SLED1 registers, channel 2 for the SLED2 registers)
- * and routes each channel to its SLED request line through the SYSCFG CFGR3
- * remapping.  This test drives the PC0 pad = datasheet SLED1_CH0 output,
- * which is served by the SLED2 channel registers (DR[1]/DMAEN2/RSTSTR2);
- * the Makefile therefore adds -DSK32_SLED_USE_SLED2=TRUE.  The pad (PC0,
- * alternate function 14) is configured by main.c.
- */
+#define SK32_RTC_USE_LSE                    FALSE
+#define SK32_RTC_IRQ_PRIORITY               3
 
 /*
  * SK32 ST driver system settings.
