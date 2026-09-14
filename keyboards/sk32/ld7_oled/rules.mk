@@ -25,6 +25,9 @@ RGB_MATRIX_DRIVER = ws2812
 WS2812_DRIVER = sled
 
 # 128x32 SSD1306 OLED on I2C1.
+# Auto-detect: keymap.c probes the I2C bus on first use and disables the OLED
+# engine (no I2C traffic) when no SSD1306 is present, so the SAME firmware runs
+# on boards with and without the OLED without breaking USB enumeration.
 OLED_ENABLE = yes
 OLED_DRIVER = ssd1306
 OLED_TRANSPORT = i2c

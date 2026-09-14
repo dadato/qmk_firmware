@@ -20,15 +20,48 @@
 #define BOOTMAGIC_LITE_ROW 0
 #define BOOTMAGIC_LITE_COLUMN 0
 
-/* SSD1306 128x32 OLED on I2C1: SDA = PB14, SCL = PB13 (alternate function 13,
- * open drain, external pull-ups).  Overrides the platform defaults PB6/PB7. */
-#define I2C1_SCL_PIN B13
-#define I2C1_SDA_PIN B14
-#define I2C1_SCL_PAL_MODE 13
-#define I2C1_SDA_PAL_MODE 13
+/* SSD1306 128x32 OLED on I2C1: SDA = PA3, SCL = PA2 (alternate function 13).
+ * The I2C lines have NO external pull-ups on the LD7, so the pads are
+ * configured in AF13 mode WITH the internal pull-up resistor enabledx'x'x'x'x'xxxxxxx
+ * (PAL_SK32_PUPDR_PULLUP OR-ed into the PAL mode). */
+#define I2C1_SCL_PIN A2
+#define I2C1_SDA_PIN A3
+#define I2C1_SCL_PAL_MODE (PAL_MODE_ALTERNATE(13) | PAL_SK32_PUPDR_PULLUP)
+#define I2C1_SDA_PAL_MODE (PAL_MODE_ALTERNATE(13) | PAL_SK32_PUPDR_PULLUP)
+
+/* Run the OLED I2C bus at fast mode (400 kHz) instead of the SK32 platform
+ * default 100 kHz, to cut per-frame refresh latency.  Fast mode needs a fast
+ * duty cycle (2/1); the SK32 I2C LLD enforces a non-STD duty above 100 kHz. */
+#define I2C1_CLOCK_SPEED 400000
+#define I2C1_DUTY_CYCLE  FAST_DUTY_CYCLE_2
 
 /* The OLED is the default 128x32 (oled_driver.h falls back to it when no
  * OLED_DISPLAY_* size macro is defined) at address 0x3C on I2C1. */
+
+/* USB suspend/wakeup: on bus suspend the USB peripheral puts its PHY into
+ * the low-power suspend mode (SK32_POWER_SUSMOD), and leaves it again on bus
+ * resume.  The RESUME interrupt stays armed, so the keyboard wakes the PC on
+ * a key press (remote wakeup) and resumes cleanly when the host wakes.  QMK
+ * still runs its suspend path (RGB_MATRIX_SLEEP turns the LEDs off) on top. */
+#define SK32_USB_LOW_POWER_ON_SUSPEND TRUE
+
+/* REAL CPU low power: while the bus is suspended, enter the Cortex-M0 STOP
+ * (deep sleep) instead of the default wait_ms(17) busy loop.  The core halts
+ * until the armed USB RESUME / an EXTI wakes it; on wakeup the low power
+ * driver (hal_low_power_lld) rebuilds the PLL/HSI clocks torn down by STOP.
+ * Works together with SK32_USB_LOW_POWER_ON_SUSPEND (USB PHY low power). */
+#define SK32_HAL_USE_LOWPOWER TRUE
+
+/* Render offload: the whole OLED draw + blocking SSD1306 I2C render runs in a
+ * dedicated ChibiOS thread (see ld7_oled.c).  OLED_TASK_EXTERNAL_LOOP makes
+ * oled_task() (drivers/oled) return immediately, so the main keyboard loop
+ * never touches oled_buffer at all.  The buffer is then accessed by only the
+ * thread (oled_set_cursor + oled_task_kb to redraw + oled_render_dirty to send
+ * I2C), which closes the old/new tearing race that previously corrupted a block
+ * while it was in flight on the bus.  OLED_UPDATE_INTERVAL paces the thread's
+ * redraw cadence. */
+#define OLED_TASK_EXTERNAL_LOOP
+#define OLED_UPDATE_INTERVAL 100
 
 /*RGB MATRIX*/
 /* 7 LED WS2812 string driven by the SK32F077 SLED peripheral
@@ -54,6 +87,25 @@
 #define RGB_MATRIX_KEYRELEASES // reacts to keyreleases (instead of keypresses)
 
 /*RGB MATRIX EFFECTS ON*/
+/* The enabled set must be a superset of what KB17 configures: QMK persists
+ * rgb_matrix mode/enable in the shared EEPROM.  When a board that saved e.g.
+ * RGB_MATRIX_DUAL_BEACON is re-flashed with a firmware that does NOT enable
+ * that effect, the switch(effect) in rgb_task_render has no case for it ->
+ * rendering stays false -> every LED stays off.  Keeping the KB17 effect set
+ * (plus SOLID_REACTIVE_SIMPLE) guarantees any previously saved mode still
+ * resolves to a renderable case. */
 #define ENABLE_RGB_MATRIX_BREATHING              //Enables RGB_MATRIX_BREATHING
+#define ENABLE_RGB_MATRIX_CYCLE_ALL              //Enables RGB_MATRIX_CYCLE_ALL
 #define ENABLE_RGB_MATRIX_CYCLE_LEFT_RIGHT       //Enables RGB_MATRIX_CYCLE_LEFT_RIGHT
+#define ENABLE_RGB_MATRIX_CYCLE_UP_DOWN          //Enables RGB_MATRIX_CYCLE_UP_DOWN
+#define ENABLE_RGB_MATRIX_RAINBOW_MOVING_CHEVRON //Enables RGB_MATRIX_RAINBOW_MOVING_CHEVRON
+#define ENABLE_RGB_MATRIX_CYCLE_OUT_IN           //Enables RGB_MATRIX_CYCLE_OUT_IN
+#define ENABLE_RGB_MATRIX_CYCLE_OUT_IN_DUAL      //Enables RGB_MATRIX_CYCLE_OUT_IN_DUAL
+#define ENABLE_RGB_MATRIX_CYCLE_PINWHEEL         //Enables RGB_MATRIX_CYCLE_PINWHEEL
+#define ENABLE_RGB_MATRIX_CYCLE_SPIRAL           //Enables RGB_MATRIX_CYCLE_SPIRAL
+#define ENABLE_RGB_MATRIX_DUAL_BEACON            //Enables RGB_MATRIX_DUAL_BEACON
+#define ENABLE_RGB_MATRIX_RAINBOW_BEACON         //Enables RGB_MATRIX_RAINBOW_BEACON
+#define ENABLE_RGB_MATRIX_RAINBOW_PINWHEELS      //Enables RGB_MATRIX_RAINBOW_PINWHEELS
+#define ENABLE_RGB_MATRIX_HUE_BREATHING          //Enables RGB_MATRIX_HUE_BREATHING
+#define ENABLE_RGB_MATRIX_SPLASH                 //Enables RGB_MATRIX_SPLASH
 #define ENABLE_RGB_MATRIX_SOLID_REACTIVE_SIMPLE  //Enables RGB_MATRIX_SOLID_REACTIVE_SIMPLE
