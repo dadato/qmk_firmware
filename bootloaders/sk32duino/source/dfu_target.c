@@ -202,7 +202,7 @@ bool target_flash_write(uint8_t *dstp, const uint8_t *src, size_t len) {
 
   /* Refuse to touch the bootloader area or to go past the end of flash. */
   if ((dst < SK32_APP_BASE) ||
-      (dst + len > SK32_APP_BASE + SK32_MAX_FW_SIZE)) {
+      (dst + len > SK32_APP_BASE + target_get_max_fw_size())) {
     return false;
   }
 
@@ -244,10 +244,24 @@ bool target_flash_write(uint8_t *dstp, const uint8_t *src, size_t len) {
 }
 
 /**
+ * @brief   Returns the total on-chip flash size of the current device.
+ * @details Read at runtime from the F_SIZE register (value in KB) and scaled
+ *          to bytes.  The register is a fixed, factory-programmed value and
+ *          the read is a plain volatile load with no HAL or clock dependency,
+ *          so it is safe to call before halInit() (e.g. in the application
+ *          jump validation).  No static cache is used on purpose: SRAM is not
+ *          cleared by a system reset, so caching would risk a stale value.
+ */
+size_t target_get_flash_total_size(void) {
+  uint32_t kb = (*SK32_FLASH_SIZE_REG) & 0xFFFFU;
+  return (size_t)kb << 10U;
+}
+
+/**
  * @brief   Returns the maximum downloadable firmware size.
  */
 size_t target_get_max_fw_size(void) {
-  return SK32_MAX_FW_SIZE;
+  return target_get_flash_total_size() - SK32_BOOT_SIZE;
 }
 
 /**

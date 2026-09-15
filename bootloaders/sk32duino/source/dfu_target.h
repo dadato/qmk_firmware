@@ -30,10 +30,11 @@
 #include <stdint.h>
 
 /*
- * SK32F077 flash geometry.
+ * SK32 flash geometry.
  * The "sk32duino" bootloader owns the first 16 KB; the QMK application is
- * linked at 0x08004000 and the whole remainder of the 128 KB device is
- * downloadable through DFU.
+ * linked at 0x08004000.  The total device flash size is read at runtime from
+ * the F_SIZE register (value in KB), so the SAME boot image adapts to 64 KB
+ * and 128 KB SK32 variants without a separate build per capacity.
  *
  * NOTE: the page erase granularity is 2 KB (measured on silicon, see the
  * session notes), NOT the 1 KB page size of the STM32F072 register model
@@ -45,8 +46,11 @@
 #define SK32_FLASH_BASE       0x08000000UL  /**< Main flash base.             */
 #define SK32_BOOT_SIZE        0x00004000UL  /**< Bootloader size (16 KB).     */
 #define SK32_APP_BASE         (SK32_FLASH_BASE + SK32_BOOT_SIZE)
-#define SK32_FLASH_TOTAL_SIZE 0x00020000UL  /**< Total device flash (128 KB). */
-#define SK32_MAX_FW_SIZE      (SK32_FLASH_TOTAL_SIZE - SK32_BOOT_SIZE)
+/* F_SIZE register: total internal flash size, in KB.  Value is read at runtime
+   so one boot image serves every SK32 capacity. */
+#if !defined(SK32_FLASH_SIZE_REG)
+#define SK32_FLASH_SIZE_REG   ((volatile uint32_t *)0x1FFFF7CCUL)
+#endif
 #define SK32_FLASH_PAGE_SIZE  0x00000800UL  /**< Erase page size (2 KB).      */
 
 #ifdef __cplusplus
@@ -81,7 +85,16 @@ bool target_prepare_flash(void);
 bool target_flash_write(uint8_t *dst, const uint8_t *src, size_t len);
 
 /**
+ * @brief   Total on-chip flash size of the current device, in bytes.
+ * @details Read at runtime from the F_SIZE register, so a single boot image
+ *          serves every SK32 capacity.  A pure volatile read with no HAL or
+ *          clock dependency, safe to call before halInit().
+ */
+size_t target_get_flash_total_size(void);
+
+/**
  * @brief   Maximum size of the downloadable application, in bytes.
+ * @details Derived at runtime: total flash size minus the bootloader area.
  */
 size_t target_get_max_fw_size(void);
 

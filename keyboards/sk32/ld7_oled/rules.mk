@@ -1,6 +1,13 @@
 # MCU name: SK32F077 (3Think Cortex-M0, STM32F072-compatible)
 MCU = SK32F077
 
+# Linker script selection (defaults to `MCU_LDSCRIPT ?= SK32F077xB` in
+# mcu_selection.mk, overridden below).
+#   SK32F072xB -> 64 KB-capable image (46 KB app, tail 2 KB page reserved for
+#                 EEPROM).  This SAME firmware also runs on a 128 KB SK32F077.
+#   SK32F077xB -> 128 KB image (110 KB app).  Only valid on a real 128 KB chip.
+MCU_LDSCRIPT = SK32F072xB
+
 # Bootloader selection
 # sk32duino: custom DFU bootloader at 0x08000000 (16 KB), VID:PID 1EAF:0003.
 # The QMK application is linked at 0x08004000 by keyboards/sk32/ld7_oled/ld/.

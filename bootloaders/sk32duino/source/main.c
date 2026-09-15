@@ -117,12 +117,14 @@ static bool jump_to_application(void) {
 
     /* Sanity checks: the initial stack pointer must point into SRAM and the
      * reset vector must live inside the downloadable application flash area
-     * (Thumb bit set).  An erased (empty) flash reads back 0xFFFFFFFF. */
+     * (Thumb bit set).  The downloadable area is bounded by the runtime flash
+     * size so a 128 KB-only image is refused on a 64 KB SK32.  An erased
+     * (empty) flash reads back 0xFFFFFFFF. */
     if ((sp < 0x20000200UL) || (sp > SK32_SRAM_END)) {
         return false;
     }
     if ((pc < SK32_APP_BASE) ||
-        (pc >= (SK32_APP_BASE + SK32_MAX_FW_SIZE))) {
+        (pc >= (SK32_APP_BASE + target_get_max_fw_size()))) {
         return false;
     }
     if ((pc & 1U) == 0U) {
