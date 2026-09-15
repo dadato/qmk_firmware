@@ -13,12 +13,119 @@
  * rebuilds the system/PLL clocks torn down by STOP.
  * Gated on SK32_HAL_USE_LOWPOWER so it only affects this board. */
 #if (SK32_HAL_USE_LOWPOWER == TRUE)
+
+/* KEY1..KEY7 of the LD7, same order as keyboard.json "matrix_pins.direct".
+ * These are the lines turned into STOP wake sources while the core sleeps. */
+static const ioline_t ld7_wake_lines[] = {
+    PAL_LINE(GPIOB, 12), /* KEY1 */
+    PAL_LINE(GPIOB, 11), /* KEY2 */
+    PAL_LINE(GPIOB, 10), /* KEY3 */
+    PAL_LINE(GPIOB, 2),  /* KEY4 */
+    PAL_LINE(GPIOB, 1),  /* KEY5 */
+    PAL_LINE(GPIOB, 0),  /* KEY6 */
+    PAL_LINE(GPIOC, 5),  /* KEY7 */
+};
+
+#define LD7_WAKE_LINE_COUNT (sizeof(ld7_wake_lines) / sizeof(ld7_wake_lines[0]))
+
+static uint32_t ld7_wake_pin_mask(void) {
+    uint32_t mask = 0U;
+
+    for (unsigned i = 0U; i < LD7_WAKE_LINE_COUNT; i++) {
+        mask |= 1U << (uint32_t)PAL_PAD(ld7_wake_lines[i]);
+    }
+
+    return mask;
+}
+
+/* Arms every key line as a STOP wake source.
+ * Reference: SK32F0xx_Firmware Package 26_07_21, RGBKeyboardSTK
+ * (Mechanical_SRGB), User/Src/kbcuDrive.c -> KBCUDVE_SleepInit(): before
+ * PWR_EnterSTOPMode() the vendor switches each key to input with pull-up and
+ * arms its EXTI line on the falling edge (SYSCFG_EXTILineConfig +
+ * EXTI_Init(EXTI_Trigger_Falling)) so that the first key press pulls the core
+ * out of deep sleep.  Without it a key cannot wake the chip at all: the only
+ * other wake sources are the periodic TIM6 tick and the USB resume line. */
+static void ld7_stop_wake_pins_arm(void) {
+    uint32_t mask = ld7_wake_pin_mask();
+
+    /* The EXTI line -> port mapping lives in SYSCFG, which needs its APB2
+       clock (the vendor calls RCC_APB2PeriphClockCmd(..SYSCFG, ENABLE) in
+       KBCUDVE_SleepInit() for the same reason). */
+    rccEnableAPB2(RCC_APB2ENR_SYSCFGEN, true);
+
+    for (unsigned i = 0U; i < LD7_WAKE_LINE_COUNT; i++) {
+        ioline_t line  = ld7_wake_lines[i];
+        uint32_t pad   = (uint32_t)PAL_PAD(line);
+        uint32_t port  = (((uint32_t)PAL_PORT(line) - (uint32_t)GPIOA) >> 10U) & 0xFU;
+        uint32_t cr    = pad >> 2U;
+        uint32_t shift = (pad & 3U) * 4U;
+
+        /* Input with pull-up: the key shorts the line to ground. */
+        palSetLineMode(line, PAL_MODE_INPUT_PULLUP);
+
+        /* Route the line to its port, 4 bits per line in SYSCFG EXTICR. */
+        SYSCFG->EXTICR[cr] = (SYSCFG->EXTICR[cr] & ~(0xFU << shift)) | (port << shift);
+    }
+
+    /* Falling edge: pressing a key pulls the line low.  The event mask is set
+       next to the interrupt mask, exactly like USBUSER_Init() arms the USB
+       resume line (EXTI->IMR|=EXTI_IMR_MR18; EXTI->EMR|=..): the wakeup out of
+       STOP is fed by the EXTI request, and none of these lines has an NVIC
+       vector of its own on this family. */
+    EXTI->RTSR &= ~mask;
+    EXTI->FTSR |= mask;
+    EXTI->EMR  |= mask;
+    EXTI->IMR  |= mask;
+
+    /* Drop anything latched before the arming (a key already held down would
+       otherwise end the first WFE immediately with a stale edge). */
+    EXTI->PR = mask;
+}
+
+/* Releases the key lines once the core is awake again: outside the suspend
+ * path QMK owns them as plain matrix inputs. */
+static void ld7_stop_wake_pins_release(void) {
+    uint32_t mask = ld7_wake_pin_mask();
+
+    EXTI->IMR  &= ~mask;
+    EXTI->EMR  &= ~mask;
+    EXTI->FTSR &= ~mask;
+    EXTI->RTSR &= ~mask;
+    EXTI->PR    = mask;
+}
+
 void suspend_power_down_kb(void) {
-    /* Enter STOP.  Returns as soon as any interrupt wakes the core; the
-       suspend loop re-checks the wakeup condition and loops while the bus
-       is still suspended. */
+    /* Arm the keys as wake sources, sleep, then release them so the matrix
+       scan in suspend_wakeup_condition() reads the pins as plain inputs. */
+    ld7_stop_wake_pins_arm();
     sk32_lowpower_stop_enter();
+
+    /* Which key lines latched a falling edge while the core slept: the same
+       hardware evidence the vendor uses to leave STOP.  Read before the
+       release below clears EXTI->PR. */
+    uint32_t wake_lines = EXTI->PR & ld7_wake_pin_mask();
+
     sk32_lowpower_stop_restore();
+    ld7_stop_wake_pins_release();
+
+    /* Remote wakeup (device -> host).
+     * Mirrors the vendor usbd_set_remote_wakeup() (SK32F0xx_Firmware Package
+     * 25_10_24, RGBKeyboardSTK (Mechanical)): on a key edge the device drives
+     * USB resume unconditionally.
+     *
+     * QMK's own call site in protocol_pre_task() gates this on
+     * (USB_DRIVER.status & USB_GETSTATUS_REMOTE_WAKEUP_ENABLED), i.e. on the
+     * host having sent SET_FEATURE(DEVICE_REMOTE_WAKEUP).  This host never
+     * sends it (USBD1.status stays 0, verified over SWD), so that path would
+     * never signal the bus and a key press could not wake the PC.  Calling
+     * usbWakeupHost() here bypasses that gate; it still only acts while
+     * state == USB_SUSPENDED, so the bus is only driven when it is really
+     * suspended. */
+    if (wake_lines != 0U) {
+        usbWakeupHost(&USBD1);
+    }
+
     suspend_power_down_user();
 }
 

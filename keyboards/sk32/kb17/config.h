@@ -24,6 +24,14 @@
 #define BOOTMAGIC_LITE_ROW 0
 #define BOOTMAGIC_LITE_COLUMN 0
 
+/* REAL CPU low power while the USB bus is suspended: enter the Cortex-M0 STOP
+ * (deep sleep) instead of the default wait_ms(17) busy loop.  The core halts
+ * until the armed USB RESUME / an EXTI wakes it; on wakeup the low power
+ * driver (hal_low_power_lld) rebuilds the PLL/HSI clocks torn down by STOP.
+ * Gated on SK32_HAL_USE_LOWPOWER so it only affects this board.  Same wiring
+ * as the LD7_OLED board. */
+#define SK32_HAL_USE_LOWPOWER TRUE
+
 /*RGB MATRIX*/
 /* LED string is driven by the SK32F077 SLED peripheral (WS2812_DRIVER=sled).
  * The data pad is SLED1_CH0 = PC0 in alternate function 14, served by the

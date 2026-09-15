@@ -38,18 +38,20 @@
 /* The OLED is the default 128x32 (oled_driver.h falls back to it when no
  * OLED_DISPLAY_* size macro is defined) at address 0x3C on I2C1. */
 
-/* USB suspend/wakeup: on bus suspend the USB peripheral puts its PHY into
- * the low-power suspend mode (SK32_POWER_SUSMOD), and leaves it again on bus
- * resume.  The RESUME interrupt stays armed, so the keyboard wakes the PC on
- * a key press (remote wakeup) and resumes cleanly when the host wakes.  QMK
- * still runs its suspend path (RGB_MATRIX_SLEEP turns the LEDs off) on top. */
-#define SK32_USB_LOW_POWER_ON_SUSPEND TRUE
+/* USB suspend/wakeup: the controller enters the bus suspend state by itself
+ * (POWER.ENSUS) and its PHY is left powered so it can still see the host
+ * resume, while the SUSPEND/RESUME interrupts stay armed.  That is what
+ * makes the keyboard wake the PC on a key press (remote wakeup) and resume
+ * cleanly when the host wakes.  The PHY must NOT be held in the software
+ * SUSMOD suspend state: in that state the controller can neither report a
+ * bus resume nor drive the resume signalling, i.e. both directions break.
+ * QMK still runs its suspend path (RGB_MATRIX_SLEEP turns the LEDs off) on
+ * top of it. */
 
 /* REAL CPU low power: while the bus is suspended, enter the Cortex-M0 STOP
  * (deep sleep) instead of the default wait_ms(17) busy loop.  The core halts
  * until the armed USB RESUME / an EXTI wakes it; on wakeup the low power
- * driver (hal_low_power_lld) rebuilds the PLL/HSI clocks torn down by STOP.
- * Works together with SK32_USB_LOW_POWER_ON_SUSPEND (USB PHY low power). */
+ * driver (hal_low_power_lld) rebuilds the PLL/HSI clocks torn down by STOP. */
 #define SK32_HAL_USE_LOWPOWER TRUE
 
 /* Render offload: the whole OLED draw + blocking SSD1306 I2C render runs in a

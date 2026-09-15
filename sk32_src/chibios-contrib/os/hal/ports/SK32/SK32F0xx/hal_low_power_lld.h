@@ -22,8 +22,8 @@
  *          The CPU is a Cortex-M0 core on a STM32F0-compatible power
  *          controller, so entering Stop puts both the core and the
  *          peripherals into a low power state and wakes only on an
- *          interrupt event (e.g. the forced USB RESUME kept armed by the
- *          USB low level driver when SK32_USB_LOW_POWER_ON_SUSPEND is set).
+ *          interrupt event (the periodic TIM6 tick on EXTI29, or the USB
+ *          resume event the controller raises on EXTI18).
  *
  * @addtogroup LOWPOWER
  * @{
@@ -80,11 +80,17 @@ extern "C" {
  * @brief   Enters the Cortex-M0 STOP mode.
  * @details Clears the wakeup/standby flags, programs the PWR controller for
  *          Stop (deep sleep), sets the SLEEPDEEP bit of the Cortex System
- *          Control Register and executes the @p __WFI() instruction.  The
- *          function returns only after an interrupt wakes the core; the
- *          SLEEPDEEP bit is cleared right after the wakeup.  If the STOP
- *          entry must be exited without a real reason (e.g. noise), the
- *          caller just loops and re-enters.
+ *          Control Register and executes the SEV/WFE/WFE sequence.  The
+ *          function returns after an event or an interrupt wakes the core;
+ *          the SLEEPDEEP bit is cleared right after the wakeup.  If the STOP
+ *          entry must be exited without a real reason (e.g. the periodic
+ *          wake tick), the caller just loops and re-enters.
+ * @note    Before the first entry the driver arms two guard rails: the
+ *          DBGMCU_CR DBG_STOP bit so the debug port stays clocked while the
+ *          core sleeps (a wedged suspend stays recoverable), and a 10 ms
+ *          TIM6/LSI tick whose update interrupt feeds the EXTI29 wakeup
+ *          event so STOP can never become terminal.  Both are left armed
+ *          afterwards.
  * @note    This function does NOT rebuild the clocks.  Call
  *          @p sk32_lowpower_stop_restore() after a confirmed wakeup.
  *
