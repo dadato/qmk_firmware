@@ -7,7 +7,7 @@ SPI, ADC, USB, EFL flash, the vendor SLED RGB peripheral and the KBCU keyboard
 controller) and does **not** link any shared STM32 driver.
 
 * Keyboard Maintainer: [NUTWANG](https://oshwhub.com/morempty)
-* Hardware Supported: W17PAD (SK32F077xB)
+* Hardware Supported: W17PAD (3Think SK32F077, 64/128 KB — SK32F077R8Q6/RBQ6 QFN64, SK32F077C8Q6/CBQ6 QFN48)
 
 ## Bootloader
 

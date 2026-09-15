@@ -3,10 +3,12 @@ MCU = SK32F077
 
 # Linker script selection (defaults to `MCU_LDSCRIPT ?= SK32F077xB` in
 # mcu_selection.mk, overridden below).
-#   SK32F072xB -> 64 KB-capable image (46 KB app, tail 2 KB page reserved for
-#                 EEPROM).  This SAME firmware also runs on a 128 KB SK32F077.
-#   SK32F077xB -> 128 KB image (110 KB app).  Only valid on a real 128 KB chip.
-MCU_LDSCRIPT = SK32F072xB
+#   SK32F077x8 -> 64 KB-capable image (46 KB app, tail 2 KB page reserved for
+#                 EEPROM).  Runs on SK32F077R8Q6/C8Q6 (64 KB) and on either
+#                 64/128 KB SK32F077.  This SAME firmware also runs on a
+#                 128 KB SK32F077.
+#   SK32F077xB -> 128 KB image (110 KB app).  For SK32F077RBQ6/CBQ6 (128 KB).
+MCU_LDSCRIPT = SK32F077x8
 
 # Bootloader selection
 # sk32duino: custom DFU bootloader at 0x08000000 (16 KB), VID:PID 1EAF:0003.

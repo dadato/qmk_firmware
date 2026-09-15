@@ -19,7 +19,7 @@
  * @file    SK32F0xx/hal_lld.h
  * @brief   SK32F0xx HAL subsystem low level driver header.
  * @details This file is the platform specific part of the HAL for the
- *          3Think SK32F0xx family (SK32F072 / SK32F077).
+ *          3Think SK32F077X family.
  *
  * @addtogroup HAL
  * @{
@@ -48,10 +48,8 @@
  * @name    Platform identification macros
  * @{
  */
-#if defined(SK32F072xB) || defined(__DOXYGEN__)
-#define PLATFORM_NAME           "SK32F072xB devices"
-#elif defined(SK32F077xB)
-#define PLATFORM_NAME           "SK32F077xB devices"
+#if defined(SK32F077) || defined(__DOXYGEN__)
+#define PLATFORM_NAME           "SK32F077 devices"
 #else
 #error "SK32F0xx device unsupported or not specified"
 #endif
@@ -297,10 +295,12 @@
  * this platform that allocates DMA1 channels must cause the macro to be
  * defined.  The SLED (hal_sled_lld.c) and KBCU (hal_kbcu_lld.c) drivers are
  * the native DMA users, so the macro is tied to the HAL_USE_SLED and
- * HAL_USE_KBCU switches.
+ * HAL_USE_KBCU switches; the SPI driver also uses DMA1 when its optional
+ * DMA engine is enabled through SK32_SPI_USE_DMA (defined in mcuconf.h).
  */
 #if (defined(HAL_USE_SLED) && (HAL_USE_SLED == TRUE)) ||                     \
-    (defined(HAL_USE_KBCU) && (HAL_USE_KBCU == TRUE))
+    (defined(HAL_USE_KBCU) && (HAL_USE_KBCU == TRUE)) ||                     \
+    (defined(SK32_SPI_USE_DMA) && (SK32_SPI_USE_DMA == TRUE))
 #define SK32_DMA_REQUIRED
 #endif
 

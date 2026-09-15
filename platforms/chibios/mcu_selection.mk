@@ -275,7 +275,10 @@ ifneq ($(findstring SK32F077, $(MCU)),)
   MCU_PORT_NAME = SK32
   MCU_SERIES = SK32F0xx
 
-  # Linker script to use (SK32F077xB, same memory map as STM32F072xB)
+  # Linker script to use (128 KB: SK32F077xB; 64 KB: SK32F077x8).  Same memory
+  # map as STM32F072xB, size suffix matches the SK32F077 part number (8 = 64 KB,
+  # B = 128 KB).  The default here is the 128 KB image; keyboards that want a
+  # single 64-KB-capable binary set MCU_LDSCRIPT in their own rules.mk.
   # - it should exist either in <chibios>/os/common/startup/ARMCMx/compilers/GCC/ld/
   #   or <keyboard_dir>/ld/
   MCU_LDSCRIPT ?= SK32F077xB
@@ -297,11 +300,14 @@ ifneq ($(findstring SK32F077, $(MCU)),)
   # Bootloader address for STM32 DFU (SK32F077 placeholder, adjust as needed)
   STM32_BOOTLOADER_ADDRESS ?= 0x1FFFC800
 
-  # SK32F077xB device definition, required by the SK32 CMSIS headers and by
-  # the hard device checks in the SK32 HAL low level drivers (hal_lld.h).
+  # SK32F077 family device definition, required by the SK32 CMSIS headers and
+  # by the hard device checks in the SK32 HAL low level drivers (hal_lld.h).
+  # The macro is family-wide (not capacity-specific): all SK32 parts are
+  # SK32F077X; the 64 vs 128 KB capacity is chosen by the linker script
+  # (MCU_LDSCRIPT) and confirmed at runtime via the F_SIZE register.
   # SK32 uses its native SysTick-based ST LLD which only supports periodic
   # mode, so force CH_CFG_ST_TIMEDELTA to zero for this series.
-  CFLAGS += -DSK32F077xB -DCH_CFG_ST_TIMEDELTA=0
+  CFLAGS += -DSK32F077 -DCH_CFG_ST_TIMEDELTA=0
 endif
 
 ifneq ($(findstring STM32F103, $(MCU)),)

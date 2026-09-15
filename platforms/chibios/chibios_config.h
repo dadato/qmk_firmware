@@ -89,7 +89,7 @@
 
 // STM32 compatibility
 #if defined(MCU_STM32)
-#    if defined(SK32F0xx_MCUCONF) || defined(SK32F077xB)
+#    if defined(SK32F0xx_MCUCONF) || defined(SK32F077)
 #        define CPU_CLOCK SK32_SYSCLK
 #    elif defined(STM32_CORE_CK)
 #        define CPU_CLOCK STM32_CORE_CK
@@ -121,7 +121,7 @@
 
 // SK32 compatibility (STM32F072-register-compatible family served by the
 // native SK32 HAL, see chibios-contrib/os/hal/ports/SK32).
-#if defined(SK32F077xB)
+#if defined(SK32F077)
 // The SK32 I2C low level driver exposes the legacy {op_mode, clock_speed,
 // duty_cycle} I2Cv1-style configuration, so the generic i2c_master driver
 // must build the I2CConfig initializer with the USE_I2CV1 layout.

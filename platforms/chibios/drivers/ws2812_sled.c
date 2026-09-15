@@ -13,7 +13,7 @@
 
 #include "ws2812.h"
 
-#if defined(HAL_USE_SLED) && defined(SK32F077xB)
+#if defined(HAL_USE_SLED) && defined(SK32F077)
 
 #    include "hal.h"
 #    include "hal_sled_lld.h"

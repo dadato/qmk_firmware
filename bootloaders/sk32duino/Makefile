@@ -148,10 +148,12 @@ CPPWARN = -Wall -Wextra -Wundef
 #
 
 # List all user C define here, like -D_DEBUG=1
-UDEFS = -DSK32F077xB
+# Family-wide macro: all SK32 parts are SK32F077X.  Capacity (64/128 KB) is
+# read at runtime from the F_SIZE register, so one boot image fits every part.
+UDEFS = -DSK32F077
 
 # Define ASM defines here
-UADEFS = -DSK32F077xB
+UADEFS = -DSK32F077
 
 # List all user directories here
 UINCDIR =

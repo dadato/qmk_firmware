@@ -43,7 +43,7 @@
 #endif
 
 // Otherwise assume V3
-#if defined(STM32F0XX) || defined(STM32L0XX) || defined(STM32G0XX) || defined(SK32F077xB)
+#if defined(STM32F0XX) || defined(STM32L0XX) || defined(STM32G0XX) || defined(SK32F077)
 // The SK32F0xx ADC LLD uses the register set (CFGR1/SMPR/CHSELR/DR) of the
 // STM32F0 class, so it is served by the ADCV1 conversion group layout.
 #    define USE_ADCV1
@@ -84,7 +84,7 @@
 
 /* User configurable ADC options */
 #ifndef ADC_COUNT
-#    if defined(RP2040) || defined(STM32F0XX) || defined(STM32F1XX) || defined(STM32F4XX) || defined(STM32G0XX) || defined(SK32F077xB) || defined(GD32VF103) || defined(WB32F3G71xx) || defined(WB32FQ95xx) || defined(AT32F415)
+#    if defined(RP2040) || defined(STM32F0XX) || defined(STM32F1XX) || defined(STM32F4XX) || defined(STM32G0XX) || defined(SK32F077) || defined(GD32VF103) || defined(WB32F3G71xx) || defined(WB32FQ95xx) || defined(AT32F415)
 #        define ADC_COUNT 1
 #    elif defined(STM32F3XX) || defined(STM32G4XX)
 #        define ADC_COUNT 4
@@ -184,7 +184,7 @@ __attribute__((weak)) adc_mux pinToMux(pin_t pin) {
         case C3:  return TO_MUX( 13, 0 );
         case C4:  return TO_MUX( 14, 0 );
         case C5:  return TO_MUX( 15, 0 );
-#elif defined(SK32F077xB)
+#elif defined(SK32F077)
         // The SK32F0xx ADC1 exposes the same external channel set as the
         // STM32F072 it is register-compatible with: IN0..IN7 on PA0..PA7
         // and IN8..IN9 on PB0..PB1 (plus internal IN16 = TS, IN17 = VREFINT).

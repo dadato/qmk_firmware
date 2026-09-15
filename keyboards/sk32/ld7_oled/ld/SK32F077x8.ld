@@ -1,5 +1,5 @@
 /*
-    3Think SK32F072xB (64 KB) memory setup with a 16 KB "sk32duino" bootloader.
+    3Think SK32F077x8 (64 KB) memory setup with a 16 KB "sk32duino" bootloader.
 
     The bootloader occupies flash0 at 0x08000000 .. 0x08003FFF.  The QMK
     application is linked to start at 0x08004000.  This 64 KB-capacity image
