@@ -35,8 +35,8 @@ bootloaders/sk32duino/
 | 区段 | 地址 | 说明 |
 |---|---|---|
 | Bootloader | `0x08000000 .. 0x08003FFF` | 16 KB，本固件 |
-| Application | `0x08004000` | QMK 固件（+ 从 `0x08004000` 起共 112 KB 可下载） |
-| 总 flash | 0x08000000 .. 0x0801FFFF | 128 KB，页粒度 **2 KB** |
+| Application | `0x08004000` | QMK 固件（最大可下载 = F_SIZE − 16 KB，运行期读取） |
+| 总 flash | 0x08000000 .. (F_SIZE 决定) | F_SIZE 寄存器运行期读取（64 KB / 128 KB），页粒度 **2 KB** |
 
 **flash 页擦粒度 = 2 KB（`SK32_FLASH_PAGE_SIZE = 0x800`）**，实测证实，**不是** STM32F072 的 1 KB。擦除命令地址落在某 2 KB 页内即擦整个 2 KB 页（地址被硬件掩到页底）。所有页操作必须按 2 KB 页对齐。
 
@@ -45,8 +45,8 @@ bootloaders/sk32duino/
 | `SK32_FLASH_BASE` | `0x08000000` |
 | `SK32_BOOT_SIZE` | `0x4000` (16 KB) |
 | `SK32_APP_BASE` | `0x08004000` |
-| `SK32_FLASH_TOTAL_SIZE` | `0x20000` (128 KB) |
-| `SK32_MAX_FW_SIZE` | 112 KB |
+| `SK32_FLASH_SIZE_REG` | `((volatile uint32_t *)0x1FFFF7CC)` (价值 = KB) |
+| `SK32_FLASH_SIZE_MASK` | `0x000000FF`（高字节硅片未驱动，读回为 1，必须按此掩码取容量） |
 | `SK32_FLASH_PAGE_SIZE` | `0x800` (2 KB) |
 
 ---
@@ -61,7 +61,7 @@ bootloaders/sk32duino/
 | `0x200001F0` | 应用写入的 **DFU 请求 magic** `0x4B32D7A1`（QK_BOOT） |
 | `0x200001F4` | **会话锁存**：`KEYED=1` / `TOUCHED=2` |
 
-**DFU 跳转流程**：应用复位向量表先从 flash 拷贝到 SRAM（512B），再通过 `SYSCFG->CFGR1 MEM_MODE` 将 SRAM 重映射到地址 0，最后直接 `msr msp + bx` 分支到应用复位向量。校验 SP∈[0x20000200,0x20002800]、PC∈[0x08004000,+112KB] 且 Thumb 位为 1，防止跳到被擦坏的镜像。
+**DFU 跳转流程**：应用复位向量表先从 flash 拷贝到 SRAM（512B），再通过 `SYSCFG->CFGR1 MEM_MODE` 将 SRAM 重映射到地址 0，最后直接 `msr msp + bx` 分支到应用复位向量。校验 SP∈[0x20000200,0x20002800]、PC∈[0x08004000, 0x08000000+F_SIZE] 且 Thumb 位为 1，防止跳到被擦坏的镜像。
 
 ---
 
@@ -100,7 +100,7 @@ dfu-util -a 2 -D sk32_kb17_default.bin
 
 # 从 0x08004000 读回验证 flash 内容（无需 ST-Link）
 dfu-util -a 2 -U dump.bin -s 0x08000000:114688
-# 说明：BL 支持 DFU_UPLOAD，可从 0x08004000 读回整个 112 KB Flash 区。
+# 说明：BL 支持 DFU_UPLOAD，可从 0x08004000 读回整个 Flash 应用区（大小 = F_SIZE − 16 KB）。
 ```
 
 **不要用 ST-Link debug 模式在线刷写**：SK32 在 debug 模式下会启用 flash 写保护（userguide 4.3），下载会报 `Error: failed to download Segment[0]`。在线重刷请走 DFU（dfu-util）。

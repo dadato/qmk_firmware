@@ -253,7 +253,7 @@ bool target_flash_write(uint8_t *dstp, const uint8_t *src, size_t len) {
  *          cleared by a system reset, so caching would risk a stale value.
  */
 size_t target_get_flash_total_size(void) {
-  uint32_t kb = (*SK32_FLASH_SIZE_REG) & 0xFFFFU;
+  uint32_t kb = (*SK32_FLASH_SIZE_REG) & SK32_FLASH_SIZE_MASK;
   return (size_t)kb << 10U;
 }
 

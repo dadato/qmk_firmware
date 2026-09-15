@@ -47,9 +47,16 @@
 #define SK32_BOOT_SIZE        0x00004000UL  /**< Bootloader size (16 KB).     */
 #define SK32_APP_BASE         (SK32_FLASH_BASE + SK32_BOOT_SIZE)
 /* F_SIZE register: total internal flash size, in KB.  Value is read at runtime
-   so one boot image serves every SK32 capacity. */
+   so one boot image serves every SK32 capacity.
+   NOTE: measured on silicon the KByte value occupies the LOW byte only, the
+   upper bits of the 32-bit read are not driven and come back as ones (a 128 KB
+   part reads 0xFF80 here), so the value must be masked with
+   SK32_FLASH_SIZE_MASK -- masking with 0xFFFF yields a bogus 65408 KB. */
 #if !defined(SK32_FLASH_SIZE_REG)
 #define SK32_FLASH_SIZE_REG   ((volatile uint32_t *)0x1FFFF7CCUL)
+#endif
+#if !defined(SK32_FLASH_SIZE_MASK)
+#define SK32_FLASH_SIZE_MASK  0x000000FFUL
 #endif
 #define SK32_FLASH_PAGE_SIZE  0x00000800UL  /**< Erase page size (2 KB).      */
 
