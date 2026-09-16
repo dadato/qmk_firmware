@@ -297,8 +297,9 @@ ifneq ($(findstring SK32F077, $(MCU)),)
   # UF2 settings
   UF2_FAMILY ?= STM32F0
 
-  # Bootloader address for STM32 DFU (SK32F077 placeholder, adjust as needed)
-  STM32_BOOTLOADER_ADDRESS ?= 0x1FFFC800
+  # sk32duino is a custom DFU bootloader (bootloaders/sk32duino) flashed via
+  # SWD/dfu-util; it is not a ROM bootloader, so no STM32_BOOTLOADER_ADDRESS
+  # is defined here.
 
   # SK32F077 family device definition, required by the SK32 CMSIS headers and
   # by the hard device checks in the SK32 HAL low level drivers (hal_lld.h).

@@ -1,8 +1,13 @@
 /*
-    3Think SK32F077xB memory setup with a 16 KB "sk32duino" bootloader.
+    3Think SK32F077x8 (64 KB) memory setup with a 16 KB "sk32duino" bootloader.
 
     The bootloader occupies flash0 at 0x08000000 .. 0x08003FFF.  The QMK
-    application is linked to start at 0x08004000.
+    application is linked to start at 0x08004000.  This 64 KB-capacity image
+    may also run on a 128 KB SK32F077: it simply uses only the low 64 KB.
+
+    The application area is capped at 46 KB (0x08004000 .. 0x0800F7FF) so the
+    2 KB EEPROM wear-leveling tail page at 0x0800F800 .. 0x0800FFFF (the last
+    2 KB page of the 64 KB device) is left untouched by the application.
 
     Cortex-M0 has no VTOR so the application interrupts are serviced from a
     copy of the application vector table placed in SRAM.  The first 512 bytes
@@ -13,13 +18,13 @@
     region.  The DFU jump magic word lives at 0x200001F0 (still inside the
     reserved area and above the copied vectors).
 
-    SK32F077 has 10 KB of SRAM: 0x20000000 .. 0x200027FF.  After reserving
+    SK32 has 10 KB of SRAM: 0x20000000 .. 0x200027FF.  After reserving
     the 512-byte vector area the application gets 9728 bytes of RAM.
 */
 
 MEMORY
 {
-    flash0 (rx) : org = 0x08004000, len = 110k
+    flash0 (rx) : org = 0x08004000, len = 46k
     flash1 (rx) : org = 0x00000000, len = 0
     flash2 (rx) : org = 0x00000000, len = 0
     flash3 (rx) : org = 0x00000000, len = 0

@@ -27,15 +27,14 @@
  * The SK32F0xx family is register-compatible with STM32F072 except for the
  * USB IP (musbfsfc) and the peripheral set: the SK32F077 variant does not
  * have the TIM1, TIM2, SPI2 and I2C2 units (see the SK32_HAS_* macros in
- * sk32_registry.h).  The SK32 port provides native drivers for the core
- * platform (clocks, SysTick-based ST, ISR aggregation, GPIO/PAL, USB,
- * USART serial, SPI and I2C) and reuses the shared ChibiOS STM32 low level
- * drivers (TIMv1, ADCv1, ...) for the remaining peripherals.  This
- * mcuconf.h must therefore satisfy two naming schemes:
- *   - SK32F0xx_MCUCONF + the SK32_* clock/ST/peripheral settings (used by
- *     the SK32 native low level drivers), and
- *   - STM32F0xx_MCUCONF + the STM32_* settings consumed by the shared
- *     ChibiOS STM32 low level drivers.
+ * sk32_registry.h).  The SK32 port provides NATIVE low level drivers for the
+ * whole peripheral set (clocks, SysTick ST, ISR aggregation, GPIO/PAL, USB,
+ * USART serial, SPI, I2C, EFL, SLED, KBCU, GPT, ADC, RTC, WDG and the
+ * Cortex-M0 STOP low-power), and does NOT pull in any shared STM32 LLD (the
+ * SK32F0xx port/platform.mk no longer references the STM32 TIMv1/ADCv1/USARTv2
+ * LLDs).  The SK32_* settings below are consumed by these native drivers.
+ * The STM32F0xx_MCUCONF define and the STM32_* names are retained only for
+ * CMSIS/driver compatibility headers; they do not gate any shared LLD.
  *
  * IRQ priorities:
  * 3...0       Lowest...Highest.
@@ -197,11 +196,13 @@
 /*
  * SERIAL driver system settings.
  * The SK32 native serial driver (SR/DR USART) is selected through the
- * SK32_SERIAL_USE_USARTx switches.  USART1 is wired to PA0 (TX) and PA1
- * (RX) through alternate function 10 on the onekey board and is used as a
- * debug heartbeat output; USART2 (PA2/PA3, alternate 1) is not used.
+ * SK32_SERIAL_USE_USARTx switches.  No SK32 keyboard enables HAL_USE_SERIAL
+ * (QMK console goes over the USB console endpoint, not USART), so all USART
+ * channels stay disabled to keep this file consistent with halconf.h.  If a
+ * future board wants a real UART console, set HAL_USE_SERIAL TRUE in its
+ * halconf.h and flip the matching switch to TRUE.
  */
-#define SK32_SERIAL_USE_USART1              TRUE
+#define SK32_SERIAL_USE_USART1              FALSE
 #define SK32_SERIAL_USE_USART2              FALSE
 #define SK32_SERIAL_USART1_PRIORITY         3
 #define SK32_SERIAL_USART2_PRIORITY         3

@@ -1,6 +1,6 @@
 {
     //Hardware Configuration
-    "keyboard_name": "LD7_OLED",
+    "keyboard_name": "ld7_oled",
     "manufacturer": "NUTWANG",
     "url": "https://oshwhub.com/morempty",
     "maintainer": "NUTWANG",

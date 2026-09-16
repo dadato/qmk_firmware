@@ -22,7 +22,7 @@
 
 /* SSD1306 128x32 OLED on I2C1: SDA = PA3, SCL = PA2 (alternate function 13).
  * The I2C lines have NO external pull-ups on the LD7, so the pads are
- * configured in AF13 mode WITH the internal pull-up resistor enabledx'x'x'x'x'xxxxxxx
+ * configured in AF13 mode WITH the internal pull-up resistor enabled
  * (PAL_SK32_PUPDR_PULLUP OR-ed into the PAL mode). */
 #define I2C1_SCL_PIN A2
 #define I2C1_SDA_PIN A3

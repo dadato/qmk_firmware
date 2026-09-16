@@ -145,6 +145,15 @@ void suspend_power_down_kb(void) {
      * really suspended. */
     if (wake_rows != 0U) {
         usbWakeupHost(&USBD1);
+        /* The 10 ms resume pulse ends, then QMK's suspend loop immediately
+           re-checks state; if the host has not yet finished resuming (hub /
+           KVM / display settle latency), the very next iteration puts the
+           core straight back into STOP and the host's resume answer is
+           missed - the machine does not wake.  Hold briefly here so the host
+           is guaranteed to observe our resume and start sending SOF before
+           the core is allowed to sleep again (mirrors QMK's official
+           USB_SUSPEND_WAKEUP_DELAY, but in the keyboard override path). */
+        wait_ms(30);
     }
 
     suspend_power_down_user();

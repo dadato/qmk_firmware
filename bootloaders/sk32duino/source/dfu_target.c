@@ -20,9 +20,9 @@
  * @brief   SK32F077 on-chip flash backend for the DFU state machine.
  *
  * The device is register compatible with STM32F072 apart from the USB IP,
- * so the flash is programmed through the legacy CMSIS registers (FLASH->KEYR
+ * the flash is programmed through the legacy CMSIS registers (FLASH->KEYR
  * unlock, page erase through CR.PER/AR/CR.STRT and 16 bit half-word program
- * through CR.PG).  Pages are erased lazily: one 1 KB page at a time, right
+ * through CR.PG).  Pages are erased lazily: one 2 KB page at a time, right
  * before it is first written, through a software page buffer.
  */
 
@@ -38,6 +38,11 @@
 static uint8_t  page_buf[SK32_FLASH_PAGE_SIZE];
 static size_t   page_base;       /* Absolute address of the staged page.     */
 static bool     page_active;     /* A page is currently being staged.        */
+
+/* Bytes of the application actually received in the current session (offset
+   from SK32_APP_BASE).  Kept so the manifest phase can CRC exactly the bytes
+   the download wrote, without touching the EEPROM tail page or stale data. */
+static size_t   fw_high;
 
 /**
  * @brief   Waits for the flash controller to become idle.
@@ -190,6 +195,7 @@ void target_flash_lock(void) {
 bool target_prepare_flash(void) {
   page_active = false;
   page_base   = 0U;
+  fw_high     = 0U;
 
   return true;
 }
@@ -204,6 +210,14 @@ bool target_flash_write(uint8_t *dstp, const uint8_t *src, size_t len) {
   if ((dst < SK32_APP_BASE) ||
       (dst + len > SK32_APP_BASE + target_get_max_fw_size())) {
     return false;
+  }
+
+  /* Grow the received high-water mark used for the manifest CRC. */
+  {
+    size_t written = (size_t)(dst + len - SK32_APP_BASE);
+    if (written > fw_high) {
+      fw_high = written;
+    }
   }
 
   while (len > 0U) {
@@ -274,9 +288,76 @@ uint16_t target_get_timeout(void) {
 }
 
 /**
+ * @brief   Computes the CRC32 (IEEE 802.3, poly 0xEDB88320) over flash bytes.
+ * @note    Bit-wise implementation to keep the bootloader footprint small.
+ */
+static uint32_t flash_crc32(const uint8_t *addr, size_t len) {
+  uint32_t crc = 0xFFFFFFFFU;
+
+  while (len-- != 0U) {
+    uint32_t byte = (uint32_t)(*addr++);
+
+    crc ^= byte;
+    for (unsigned bit = 0U; bit < 8U; bit++) {
+      crc = (crc >> 1U) ^ ((crc & 1U) != 0U ? 0xEDB88320U : 0U);
+    }
+  }
+
+  return ~crc;
+}
+
+/**
+ * @brief   Records the CRC32 of the just-downloaded application (manifest).
+ * @details Must be called once the last flash page has been flushed.  The CR
+ *          covers exactly the bytes the download wrote ([SK32_APP_BASE,
+ *          SK32_APP_BASE + fw_high)), so neither the EEPROM tail page nor
+ *          stale flash is included.
+ */
+void target_store_app_crc32(void) {
+  if (fw_high == 0U) {
+    return;
+  }
+
+  uint32_t crc = flash_crc32((const uint8_t *)SK32_APP_BASE, fw_high);
+
+  *SK32_APP_CRC_ADDR       = crc;
+  *SK32_APP_CRC_SIZE_ADDR  = fw_high;
+  *SK32_APP_CRC_MAGIC_ADDR = SK32_APP_CRC_MAGIC;
+}
+
+/**
+ * @brief   Verifies the application integrity against the last DFU record.
+ * @return  @p true when no record is present (rely on the vector-table
+ *          plausibility check) or when the on-chip app CRC matches; @p false
+ *          when a record exists but the app on flash no longer matches it
+ *          (corrupted -> the bootloader must stay in DFU).
+ */
+bool target_app_crc32_valid(void) {
+  if (*SK32_APP_CRC_MAGIC_ADDR != SK32_APP_CRC_MAGIC) {
+    return true;
+  }
+
+  uint32_t size = *SK32_APP_CRC_SIZE_ADDR;
+  if ((size == 0U) || (size > target_get_max_fw_size())) {
+    return false;
+  }
+
+  uint32_t crc = flash_crc32((const uint8_t *)SK32_APP_BASE, size);
+
+  return (crc == *SK32_APP_CRC_ADDR);
+}
+
+/**
  * @brief   Flushes the last partially filled page (manifest phase).
  * @return  @p true on success, @p false on flash programming failure.
  */
 bool target_complete_programming(void) {
-  return flash_flush_page();
+  bool ok = flash_flush_page();
+
+  /* Record the integrity of the freshly programmed image for the next boot. */
+  if (ok) {
+    target_store_app_crc32();
+  }
+
+  return ok;
 }

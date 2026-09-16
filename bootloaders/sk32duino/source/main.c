@@ -77,17 +77,22 @@
 /* Boot key selection.                                                       */
 /*===========================================================================*/
 
-/* One of the two following macros selects which key forces DFU at reset.
- * Uncomment the one matching the keyboard the bootloader is flashed on.
+/* The key that forces DFU at reset is selected at BUILD time by the
+ * Makefile's BOOT_KEY variable (one define per supported keyboard):
  *
- * - SK32_DFU_KEY_KB17: W17PAD / "kb17" 17 key numpad, BOOTMAGIC key
- *   (NumLock = matrix[0][0], row PB2 x column PB12).
- * - SK32_DFU_KEY_ONEKEY: "sk32f077 onekey" bring-up board, its single
- *   direct key on PB5 (internal pull-up, pressed = low).
+ * - BOOT_KEY=kb17  -> SK32_DFU_KEY_KB17: W17PAD / "kb17" 17 key numpad,
+ *   BOOTMAGIC key (NumLock = matrix[0][0], row PB2 x column PB12).
+ * - BOOT_KEY=ld7   -> SK32_DFU_KEY_LD7: "ld7" 7-key direct-wire board, its
+ *   first key KEY1 (direct wire on PB12, internal pull-up, pressed = low).
+ * - BOOT_KEY=onekey-> SK32_DFU_KEY_ONEKEY: "sk32f077 onekey" bring-up board,
+ *   its single direct key on PB5 (internal pull-up, pressed = low).
  *
- * With neither macro defined only the DFU magic word (QK_BOOT) enters DFU. */
-#define SK32_DFU_KEY_KB17
-/* #define SK32_DFU_KEY_ONEKEY */
+ * With no macro defined only the DFU magic word (QK_BOOT) enters DFU. */
+#if !defined(SK32_DFU_KEY_KB17) && \
+    !defined(SK32_DFU_KEY_LD7)  && \
+    !defined(SK32_DFU_KEY_ONEKEY)
+#error "Pick a keyboard with BOOT_KEY=kb17|ld7|onekey (see Makefile)"
+#endif
 
 /*===========================================================================*/
 /* Application jump helpers.                                                 */
@@ -155,6 +160,32 @@ static bool jump_to_application(void) {
 }
 
 /**
+ * @brief   Returns @p true when the application flash area holds a plausible
+ *          image (a valid initial SP pointing into SRAM and a Thumb reset
+ *          vector inside the downloadable area).
+ * @note    Lightweight check with no side effects, safe to call before
+ *          halInit().  An erased/empty flash reads back 0xFFFFFFFF and is
+ *          reported as invalid.
+ */
+static bool app_image_valid(void) {
+    const uint32_t *vt = (const uint32_t *)SK32_APP_BASE;
+    uint32_t        sp = vt[0];
+    uint32_t        pc = vt[1];
+
+    if ((sp < 0x20000200UL) || (sp > SK32_SRAM_END)) {
+        return false;
+    }
+    if ((pc < SK32_APP_BASE) ||
+        (pc >= (SK32_APP_BASE + target_get_max_fw_size()))) {
+        return false;
+    }
+    if ((pc & 1U) == 0U) {
+        return false;
+    }
+    return true;
+}
+
+/**
  * @brief   Returns @p true when the previous boot pass asked to run the
  *          application and consumes the request.
  * @note    Called before anything is initialized, directly on SRAM.
@@ -199,9 +230,23 @@ static bool boot_key_pressed(void) {
 
     /* Row 0 = PB2, input with pull-up. */
     palSetPadMode(GPIOB, 2U, PAL_MODE_INPUT_PULLUP);
-    chThdSleepMilliseconds(2);
 
-    pressed = (palReadPad(GPIOB, 2U) == PAL_LOW);
+    /* Debounce + hold-window sampling: sample PB2 every 5 ms over a 30 ms
+       window (6 reads) and report the key pressed only when at least half of
+       the reads are low.  This rejects contact bounce shorter than ~5 ms and
+       keeps detecting the key across a 30 ms reset window. */
+    {
+        unsigned int i;
+        unsigned int low = 0U;
+
+        for (i = 0U; i < 6U; i++) {
+            chThdSleepMilliseconds(5);
+            if (palReadPad(GPIOB, 2U) == PAL_LOW) {
+                low++;
+            }
+        }
+        pressed = (low >= 3U);
+    }
 
     /* Restore the pads to inputs so the application boots on a clean pin
      * configuration (it re-initializes the pins anyway). */
@@ -210,6 +255,35 @@ static bool boot_key_pressed(void) {
     palSetPadMode(GPIOB, 11U, PAL_MODE_INPUT_PULLUP);
     palSetPadMode(GPIOB, 12U, PAL_MODE_INPUT_PULLUP);
     palSetPadMode(GPIOB, 13U, PAL_MODE_INPUT_PULLUP);
+
+    return pressed;
+}
+#elif defined(SK32_DFU_KEY_LD7)
+/**
+ * @brief   Scans the "ld7" 7-key direct-wire board boot key: KEY1 on PB12.
+ * @details Direct-wire keys have no matrix: PB12 is an input with an internal
+ *          pull-up and pressing the key shorts it to ground (pressed = low).
+ */
+static bool boot_key_pressed(void) {
+    bool pressed;
+
+    palSetPadMode(GPIOB, 12U, PAL_MODE_INPUT_PULLUP);
+
+    /* Debounce + hold-window sampling: sample PB12 every 5 ms over a 30 ms
+       window (6 reads) and report the key pressed only when at least half of
+       the reads are low. */
+    {
+        unsigned int i;
+        unsigned int low = 0U;
+
+        for (i = 0U; i < 6U; i++) {
+            chThdSleepMilliseconds(5);
+            if (palReadPad(GPIOB, 12U) == PAL_LOW) {
+                low++;
+            }
+        }
+        pressed = (low >= 3U);
+    }
 
     return pressed;
 }
@@ -222,9 +296,22 @@ static bool boot_key_pressed(void) {
     bool pressed;
 
     palSetPadMode(GPIOB, 5U, PAL_MODE_INPUT_PULLUP);
-    chThdSleepMilliseconds(2);
 
-    pressed = (palReadPad(GPIOB, 5U) == PAL_LOW);
+    /* Debounce + hold-window sampling: sample PB5 every 5 ms over a 30 ms
+       window (6 reads) and report the key pressed only when at least half of
+       the reads are low. */
+    {
+        unsigned int i;
+        unsigned int low = 0U;
+
+        for (i = 0U; i < 6U; i++) {
+            chThdSleepMilliseconds(5);
+            if (palReadPad(GPIOB, 5U) == PAL_LOW) {
+                low++;
+            }
+        }
+        pressed = (low >= 3U);
+    }
 
     return pressed;
 }
@@ -283,6 +370,22 @@ int main(void) {
     bool     boot_key;
 
     /*
+     * Empty/invalid application area or a corrupted image that fails the
+     * integrity check: there is nothing safe to boot, so stay in the
+     * bootloader (DFU) unconditionally to receive a firmware image, no
+     * matter how this reset was reached.  The CRC gate only refuses to boot
+     * when a clean DFU record exists but no longer matches the flash, so a
+     * directly (SWD) flashed app without a record still boots.
+     */
+    if (!app_image_valid() || !target_app_crc32_valid()) {
+        halInit();
+        chSysInit();
+        dfu_boot();
+        for (;;) {
+        }
+    }
+
+    /*
      * Fast path: a previous boot pass asked to run the application.  Jump
      * before starting the HAL/RTOS so the application sees a reset-like
      * context (Cortex-M0 cannot change the stack pointer selection from
@@ -290,8 +393,9 @@ int main(void) {
      */
     if (boot_app_requested()) {
         /* jump_to_application() only returns when no valid image is found;
-         * in that case offer DFU instead of bouncing between resets. */
-        if (!jump_to_application()) {
+         * in that case offer DFU instead of bouncing between resets.  The
+         * CRC gate additionally refuses to boot a corrupted image. */
+        if ((!target_app_crc32_valid()) || (!jump_to_application())) {
             halInit();
             chSysInit();
             dfu_boot();

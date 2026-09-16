@@ -22,7 +22,10 @@ EEPROM_DRIVER = vendor
 BOOTMAGIC_ENABLE = yes    # Virtual DIP switch configuration
 MOUSEKEY_ENABLE = yes     # Mouse keys
 EXTRAKEY_ENABLE = yes     # Audio control and System control
-CONSOLE_ENABLE = no       # Console for debug
+CONSOLE_ENABLE = no       # Console off: on the 64 KB SK32F077x8 build the USB
+                          # console endpoint would overflow the 46 KB app area
+                          # (the LD7 OLED + RGB image is already large), so it
+                          # stays disabled here (KB17 does enable it)
 COMMAND_ENABLE = no       # Commands for debug and configuration
 NKRO_ENABLE = yes         # USB Nkey Rollover
 BACKLIGHT_ENABLE = no

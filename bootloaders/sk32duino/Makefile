@@ -84,8 +84,15 @@ endif
 # Project, target, sources and paths
 #
 
-# Define project name here
-PROJECT = sk32duino
+# Keyboard this bootloader image is built for.  Selects the DFU boot key:
+#   make BOOT_KEY=kb17   (default) - NumLock matrix[0][0] on PB2 x PB12
+#   make BOOT_KEY=ld7              - LD7 direct-wire KEY1 on PB12
+#   make BOOT_KEY=onekey           - bring-up onekey direct key on PB5
+BOOT_KEY ?= kb17
+
+# Define project name here.  The keyboard tag keeps the two builds distinct
+# (build/sk32duino_kb17.bin vs build/sk32duino_ld7.bin).
+PROJECT = sk32duino_$(BOOT_KEY)
 
 # Target settings.
 MCU  = cortex-m0
@@ -151,6 +158,14 @@ CPPWARN = -Wall -Wextra -Wundef
 # Family-wide macro: all SK32 parts are SK32F077X.  Capacity (64/128 KB) is
 # read at runtime from the F_SIZE register, so one boot image fits every part.
 UDEFS = -DSK32F077
+# Keyboard-specific DFU boot-key selector (kept in sync with BOOT_KEY above).
+ifeq ($(BOOT_KEY),ld7)
+  UDEFS += -DSK32_DFU_KEY_LD7
+else ifeq ($(BOOT_KEY),onekey)
+  UDEFS += -DSK32_DFU_KEY_ONEKEY
+else
+  UDEFS += -DSK32_DFU_KEY_KB17
+endif
 
 # Define ASM defines here
 UADEFS = -DSK32F077

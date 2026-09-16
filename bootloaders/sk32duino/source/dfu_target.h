@@ -60,6 +60,20 @@
 #endif
 #define SK32_FLASH_PAGE_SIZE  0x00000800UL  /**< Erase page size (2 KB).      */
 
+/*
+ * Reserved-SRAM handshake slots recording the CRC32 of the last DFU
+ * download so a later boot pass can verify the application image before
+ * jumping to it.  The 0x20000000 .. 0x200001FF vector-table copy area is
+ * never used by the application (whose data/BSS start at 0x20000200) and is
+ * NOT cleared by a system reset, so the record survives from the download
+ * pass into the next boot.  Slots are placed to avoid the DFU magic word at
+ * 0x200001F0 and the run-application tags at 0x200001E4/E8.
+ */
+#define SK32_APP_CRC_MAGIC_ADDR ((volatile uint32_t *)0x200001D0UL)
+#define SK32_APP_CRC_ADDR       ((volatile uint32_t *)0x200001D4UL)
+#define SK32_APP_CRC_SIZE_ADDR  ((volatile uint32_t *)0x200001D8UL)
+#define SK32_APP_CRC_MAGIC      0x4B524331UL  /**< "CRC1" valid record tag.   */
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -116,6 +130,25 @@ uint16_t target_get_timeout(void);
  * @return  @p true on success, @p false on flash programming failure.
  */
 bool target_complete_programming(void);
+
+/**
+ * @brief   Records the CRC32 of the just-downloaded application.
+ * @details Called at the end of the manifest phase after the last flash page
+ *          is flushed.  Computes a CRC32 over the on-chip bytes the download
+ *          actually wrote and stores it (with the size) in reserved SRAM so
+ *          the next boot pass can verify the image before jumping.
+ */
+void target_store_app_crc32(void);
+
+/**
+ * @brief   Verifies the application image integrity against the record left
+ *          by the last DFU download.
+ * @return  @p true  when no record exists (fall back to the vector-table
+ *          plausibility check) or the CRC32 of the on-chip app matches;
+ *          @p false when a record exists but the app on flash does NOT match
+ *          it (the image is corrupted -> the bootloader must stay in DFU).
+ */
+bool target_app_crc32_valid(void);
 
 #ifdef __cplusplus
 }

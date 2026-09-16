@@ -99,7 +99,8 @@ bash ./bootloaders/sk32duino/build_bl.sh
 dfu-util -a 2 -D sk32_kb17_default.bin
 
 # 从 0x08004000 读回验证 flash 内容（无需 ST-Link）
-dfu-util -a 2 -U dump.bin -s 0x08000000:114688
+# 回读长度取决于芯片容量：64 KB -> 48 KB (0xC000)；128 KB -> 112 KB (0x1C000)
+dfu-util -a 2 -U dump.bin -s 0x08000000:0x1C000
 # 说明：BL 支持 DFU_UPLOAD，可从 0x08004000 读回整个 Flash 应用区（大小 = F_SIZE − 16 KB）。
 ```
 

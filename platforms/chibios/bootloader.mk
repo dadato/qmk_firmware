@@ -29,6 +29,7 @@
 #     at32-dfu     AT32 USB DFU in ROM
 #     tinyuf2      TinyUF2
 #     rp2040       Raspberry Pi RP2040
+#     sk32duino    Custom 3Think SK32 DFU bootloader (SK32F077, flashed via SWD/dfu-util)
 # Current options for RISC-V:
 #     gd32v-dfu    GD32V USB DFU in ROM
 #
