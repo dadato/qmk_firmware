@@ -1,9 +1,8 @@
 #pragma once
 /*qmk compile -kb sk32/kb17 -km default*/
 
-/* key matrix size */
-#define MATRIX_ROWS 5
-#define MATRIX_COLS 4
+/* Matrix size (MATRIX_ROWS / MATRIX_COLS) is generated from keyboard.json
+ * ("matrix_size") by the data-driven system; only the pins are defined here. */
 
 /* key matrix pins
  * ROW1-5: PB2 / PB1 / PB0 / PC5 / PC4

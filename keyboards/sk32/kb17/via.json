@@ -1,5 +1,5 @@
 {
-    "name": "W17PAD",
+    "name": "SK32 KB17",
     "vendorId": "0x0194",
     "productId": "0x0463",
     "matrix": {
@@ -18,8 +18,5 @@
     },
     "menus": [
         "qmk_rgb_matrix"
-    ],
-    "keycodes": [
-        "qmk_rgb_matrix_keycodes"
     ]
 }

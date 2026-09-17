@@ -55,9 +55,11 @@ endif
 PLATFORMSRC += $(CHIBIOS_CONTRIB)/os/hal/ports/SK32/SK32F0xx/sk32_dma.c
 
 # The SK32 SPI is a legacy CR1/CR2/SR/DR class unit (SPIv1 class), its
-# native interrupt-driven driver is used instead of the shared STM32 SPIv2
-# LLD (the latter would require the STM32 registry macros, e.g.
-# STM32_HAS_SPI1, which the SK32 platform does not define).
+# native driver is used instead of the shared STM32 SPIv2 LLD (the latter
+# would require the STM32 registry macros, e.g. STM32_HAS_SPI1, which the
+# SK32 platform does not define).  The driver is interrupt-driven by
+# default and can be switched to a DMA1 based transfer engine (SPI1 only)
+# with the SK32_SPI_USE_DMA option.
 ifeq ($(USE_SMART_BUILD),yes)
 ifneq ($(findstring HAL_USE_SPI TRUE,$(HALCONF)),)
 PLATFORMSRC += $(CHIBIOS_CONTRIB)/os/hal/ports/SK32/SK32F0xx/hal_spi_lld.c

@@ -133,16 +133,21 @@ void suspend_power_down_kb(void) {
     /* Remote wakeup (device -> host).
      * Mirrors the vendor usbd_set_remote_wakeup() (SK32F0xx_Firmware Package
      * 25_10_24, RGBKeyboardSTK (Mechanical)): on a key edge the device drives
-     * USB resume unconditionally.
+     * USB resume unconditionally (POWER.RESUME held ~10 ms then released).
      *
      * QMK's own call site in protocol_pre_task() gates this on
-     * (USB_DRIVER.status & USB_GETSTATUS_REMOTE_WAKEUP_ENABLED), i.e. on the
+     * (USB_DRIVER.status & USB_GETSTATUS_REMOTE_WAKEUP_ENABLED) - i.e. on the
      * host having sent SET_FEATURE(DEVICE_REMOTE_WAKEUP).  This host never
      * sends it (USBD1.status stays 0, verified over SWD on the LD7), so that
      * path would never signal the bus and a key press could not wake the PC.
-     * Calling usbWakeupHost() here bypasses that gate; it still only acts
-     * while state == USB_SUSPENDED, so the bus is only driven when it is
-     * really suspended. */
+     * Calling usbWakeupHost() here bypasses that QMK/SET_FEATURE gate, but
+     * usbWakeupHost() is itself gated on (state == USB_SUSPENDED); after a
+     * STOP wake the USB driver has often already left that state, so the
+     * signal is silently dropped and the host never wakes.  Drive the LLD
+     * resume primitive directly instead - exactly the vendor's unconditional
+     * usbd_set_remote_wakeup() - so the bus is always pulsed on a key edge.
+     * It only runs while we are inside this suspend loop (the bus is
+     * suspended), so a resume is not generated on an active bus. */
     if (wake_rows != 0U) {
         usbWakeupHost(&USBD1);
         /* The 10 ms resume pulse ends, then QMK's suspend loop immediately
