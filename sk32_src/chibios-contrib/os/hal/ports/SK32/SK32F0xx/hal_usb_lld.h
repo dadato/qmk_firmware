@@ -511,7 +511,14 @@ struct USBDriver {
   do {                                                                      \
     (void)(usbp);                                                           \
     SK32_USB->POWER |= SK32_POWER_RESUME;                                   \
-    osalThreadSleepMilliseconds(10);                                        \
+    /* 纯 HCLK 忙等 ~10ms: 完全不依赖 SysTick/中断/调度, 用于排除软件时序    \
+       因素, 确认脉宽是否由 USB 核状态机自行结束而非软件延时决定。           \
+       ~4 cyc/iter @ SK32_HCLK, volatile 防优化。 */                        \
+    volatile uint32_t _sk32_res_hold = (uint32_t)(SK32_HCLK / 3200UL);      \
+    while (_sk32_res_hold != 0U) {                                         \
+      __asm volatile ("nop");                                              \
+      _sk32_res_hold--;                                                     \
+    }                                                                       \
     SK32_USB->POWER &= (uint8_t)~SK32_POWER_RESUME;                         \
   } while (false)
 
