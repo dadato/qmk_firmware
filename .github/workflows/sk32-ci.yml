@@ -26,7 +26,7 @@ jobs:
         run: pip3 install -r requirements-dev.txt
 
       - name: Fetch base branch
-        run: git fetch origin master
+        run: git fetch origin develop
 
       - name: Lint keyboards
         run: |
@@ -35,7 +35,7 @@ jobs:
 
       - name: Check formatting
         run: |
-          BASE=$(git merge-base origin/master HEAD)
+          BASE=$(git merge-base origin/develop HEAD)
           CHANGED=$(git diff --name-only "$BASE")
           C_FILES=$(echo "$CHANGED" | grep -E '\.(c|h)$' || true)
           if [ -n "$C_FILES" ]; then
@@ -44,7 +44,13 @@ jobs:
           qmk format-text $CHANGED || true
           git diff --exit-code
 
-      - name: Compile keyboards
+      - name: Compile changed keyboards (all keymaps)
         run: |
-          qmk compile -kb sk32/kb17 -km default
-          qmk compile -kb sk32/ld7_oled -km default
+          qmk mass-compile -kb sk32/kb17 -km all
+          qmk mass-compile -kb sk32/ld7_oled -km all
+          qmk mass-compile -kb handwired/onekey/sk32f077 -km all
+
+      - name: Compile platform regression samples
+        run: |
+          qmk compile -kb handwired/onekey/stm32f0_disco -km default
+          qmk compile -kb handwired/onekey/stm32f0_disco -km oled
