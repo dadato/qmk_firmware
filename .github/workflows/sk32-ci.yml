@@ -1,0 +1,50 @@
+name: SK32 Manual CI
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    container: ghcr.io/qmk/qmk_cli
+
+    steps:
+      - name: Disable safe.directory check
+        run: git config --global --add safe.directory '*'
+
+      - uses: actions/checkout@v7
+        with:
+          ref: feat/sk32
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Install dependencies
+        run: pip3 install -r requirements-dev.txt
+
+      - name: Fetch base branch
+        run: git fetch origin master
+
+      - name: Lint keyboards
+        run: |
+          qmk lint --strict -kb sk32/kb17
+          qmk lint --strict -kb sk32/ld7_oled
+
+      - name: Check formatting
+        run: |
+          BASE=$(git merge-base origin/master HEAD)
+          CHANGED=$(git diff --name-only "$BASE")
+          C_FILES=$(echo "$CHANGED" | grep -E '\.(c|h)$' || true)
+          if [ -n "$C_FILES" ]; then
+            qmk format-c --core-only $C_FILES || true
+          fi
+          qmk format-text $CHANGED || true
+          git diff --exit-code
+
+      - name: Compile keyboards
+        run: |
+          qmk compile -kb sk32/kb17 -km default
+          qmk compile -kb sk32/ld7_oled -km default
